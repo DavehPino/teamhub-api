@@ -1,0 +1,25 @@
+{
+  "name": "teamhub-api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "API de gestión de un equipo deportivo: actividades, partidos, videos, plantel, formaciones y flyers",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs --listen 3200",
+    "build": "node scripts/check-functions.mjs && tsc -p tsconfig.json",
+    "check:functions": "node scripts/check-functions.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "db:types": "supabase gen types typescript --linked --schema public > shared/database.types.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1131.0",
+    "@aws-sdk/s3-request-presigner": "^3.1131.0",
+    "@supabase/supabase-js": "^2.116.0",
+    "zod": "^4.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "supabase": "^2.117.0",
+    "typescript": "^7.0.2"
+  }
+}
