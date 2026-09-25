@@ -63,8 +63,9 @@ export const env = {
   get openrouter() {
     return {
       apiKey: optional('OPENROUTER_API_KEY'),
+      // Lista separada por comas: el primero es el principal y el resto, respaldo si falla (OpenRouter `models`).
       // `openrouter/free` enruta a un modelo gratuito disponible: sobrevive a que retiren uno concreto.
-      model: optional('OPENROUTER_MODEL') ?? 'openrouter/free',
+      models: (optional('OPENROUTER_MODEL') ?? 'openrouter/free').split(',').map((m) => m.trim()).filter(Boolean),
     }
   },
 }

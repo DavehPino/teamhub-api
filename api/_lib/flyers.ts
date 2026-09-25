@@ -26,6 +26,10 @@ import { getOwnTeam } from './teams.js'
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 /** Los modelos gratuitos pueden tardar: margen amplio, por debajo del maxDuration de la función (vercel.json). */
 const TIMEOUT_MS = 50_000
+/** Reintentos cuando OpenRouter contesta 200 con un cuerpo vacío o cortado (proveedor gratuito caído a medias). */
+const TRUNCATED_RETRIES = 1
+/** No merece la pena reintentar si queda menos tiempo que esto antes del límite. */
+const MIN_RETRY_BUDGET_MS = 10_000
 const CONTEXT_ACTIVITIES = 8
 
 const FIELD_GUIDE: Record<(typeof FLYER_TEXT_FIELDS)[number], string> = {
@@ -183,19 +187,36 @@ type ChatCompletion = {
   error?: { message?: string; code?: number }
 }
 
-async function callOpenRouter(apiKey: string, model: string, system: string, user: string): Promise<ChatCompletion> {
-  let res: Response
+type RawResponse = { status: number; ok: boolean; contentType: string | null; body: string }
+
+/** Recorte del cuerpo para los logs: suficiente para reconocer HTML, relleno o un JSON cortado. */
+function snippet(body: string): string {
+  return JSON.stringify(body.trim().slice(0, 300))
+}
+
+function parseCompletion(body: string): ChatCompletion | null {
   try {
-    res = await fetch(OPENROUTER_URL, {
+    const value: unknown = JSON.parse(body)
+    return isRecord(value) ? (value as ChatCompletion) : null
+  } catch {
+    return null
+  }
+}
+
+/** Una petición a OpenRouter con presupuesto de tiempo que cubre también la lectura del cuerpo. */
+async function requestCompletion(apiKey: string, models: string[], system: string, user: string, budgetMs: number): Promise<RawResponse> {
+  try {
+    const res = await fetch(OPENROUTER_URL, {
       method: 'POST',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(budgetMs),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'X-Title': 'teamhub-api',
       },
       body: JSON.stringify({
-        model,
+        model: models[0],
+        ...(models.length > 1 ? { models } : {}),
         temperature: 0.7,
         response_format: { type: 'json_object' },
         messages: [
@@ -204,36 +225,50 @@ async function callOpenRouter(apiKey: string, model: string, system: string, use
         ],
       }),
     })
+    return { status: res.status, ok: res.ok, contentType: res.headers.get('content-type'), body: await res.text() }
   } catch (err) {
     if (err instanceof DOMException && err.name === 'TimeoutError') {
       throw new HttpError(504, 'ai_timeout', 'El asistente tardó demasiado en responder. Inténtalo de nuevo.')
     }
+    console.error('OpenRouter inalcanzable', err)
     throw new HttpError(502, 'ai_unavailable', 'No se pudo contactar con el asistente de IA.')
   }
+}
 
-  const data = (await res.json().catch(() => null)) as ChatCompletion | null
-  if (res.status === 429) {
-    throw new HttpError(429, 'ai_rate_limited', 'Se alcanzó el límite gratuito del asistente. Espera un momento y reintenta.')
+async function callOpenRouter(apiKey: string, models: string[], system: string, user: string): Promise<ChatCompletion> {
+  const deadline = Date.now() + TIMEOUT_MS
+  for (let attempt = 0; ; attempt++) {
+    const res = await requestCompletion(apiKey, models, system, user, Math.max(1_000, deadline - Date.now()))
+    const data = parseCompletion(res.body)
+    if (res.status === 429) {
+      throw new HttpError(429, 'ai_rate_limited', 'Se alcanzó el límite gratuito del asistente. Espera un momento y reintenta.')
+    }
+    if (res.status === 401 || res.status === 403) {
+      console.error('OpenRouter rechazó la clave', data?.error ?? snippet(res.body))
+      throw new HttpError(503, 'ai_disabled', 'La clave de OpenRouter no es válida (OPENROUTER_API_KEY).')
+    }
+    if (!res.ok) {
+      console.error('OpenRouter', res.status, data?.error ?? snippet(res.body))
+      throw new HttpError(502, 'ai_error', data?.error?.message ?? 'El asistente de IA devolvió un error.')
+    }
+    if (data?.choices?.length) return data
+    // OpenRouter manda el 200 y espacios de keep-alive mientras el modelo trabaja; si el proveedor
+    // falla después, el cuerpo llega vacío, cortado o con un {"error"} pese al 200.
+    const reason = data?.error ? `error con 200: ${JSON.stringify(data.error)}` : `sin JSON (${res.contentType}, ${res.body.length} bytes): ${snippet(res.body)}`
+    console.error(`OpenRouter ${models.join(',')} intento ${attempt + 1}: ${reason}`)
+    if (attempt < TRUNCATED_RETRIES && deadline - Date.now() > MIN_RETRY_BUDGET_MS) continue
+    throw new HttpError(502, 'ai_error', data?.error?.message ?? 'El asistente devolvió una respuesta incompleta. Inténtalo de nuevo.')
   }
-  if (res.status === 401 || res.status === 403) {
-    console.error('OpenRouter rechazó la clave', data?.error)
-    throw new HttpError(503, 'ai_disabled', 'La clave de OpenRouter no es válida (OPENROUTER_API_KEY).')
-  }
-  if (!res.ok || !data) {
-    console.error('OpenRouter', res.status, data?.error)
-    throw new HttpError(502, 'ai_error', data?.error?.message ?? 'El asistente de IA devolvió un error.')
-  }
-  return data
 }
 
 export async function suggestFlyer(input: FlyerSuggestInput): Promise<FlyerSuggestion> {
-  const { apiKey, model } = env.openrouter
+  const { apiKey, models } = env.openrouter
   if (!apiKey) {
     throw new HttpError(503, 'ai_disabled', 'El asistente no está configurado en el servidor (falta OPENROUTER_API_KEY).')
   }
 
   const [activities, team] = await Promise.all([upcomingContext(input.today), getOwnTeam()])
-  const completion = await callOpenRouter(apiKey, model, systemPrompt(team.name), userPrompt(input, activities))
+  const completion = await callOpenRouter(apiKey, models, systemPrompt(team.name), userPrompt(input, activities))
   const parsed = extractJson(completion.choices?.[0]?.message?.content ?? '')
   if (!isRecord(parsed)) {
     throw new HttpError(502, 'ai_invalid', 'El asistente respondió en un formato inesperado. Prueba de nuevo o reformula el pedido.')
@@ -243,6 +278,6 @@ export async function suggestFlyer(input: FlyerSuggestInput): Promise<FlyerSugge
   return {
     flyer: normalizeFlyer(isRecord(parsed.flyer) ? parsed.flyer : parsed, input.flyer, input.assets),
     message: message.slice(0, 300),
-    model: completion.model ?? model,
+    model: completion.model ?? models[0],
   }
 }
