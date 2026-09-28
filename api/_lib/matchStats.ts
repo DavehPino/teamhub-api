@@ -41,6 +41,7 @@ export function toMatchStats(partido: CourtrackPartido, ours: Side, courtrackId:
     substitutions: pair(set.substitutions_a, set.substitutions_b),
     stats: pair(set.stats_a, set.stats_b),
     lineup: ours === 'a' ? set.lineup_a : set.lineup_b,
+    roster: (ours === 'a' ? set.roster_a : set.roster_b) ?? [],
     events: set.events.map(
       (event): MatchSetEvent => ({
         ...pair(event.score_a, event.score_b),
@@ -48,6 +49,7 @@ export function toMatchStats(partido: CourtrackPartido, ours: Side, courtrackId:
         kind: event.kind,
         player: event.player,
         detail: event.detail,
+        opponent: event.opponent ?? null,
       }),
     ),
   })
@@ -63,5 +65,6 @@ export function toMatchStats(partido: CourtrackPartido, ours: Side, courtrackId:
     players: partido.players
       .filter((player) => player.team === ownName)
       .map(({ team: _team, ...player }) => player),
+    play_detail: partido.play_detail ?? false,
   }
 }

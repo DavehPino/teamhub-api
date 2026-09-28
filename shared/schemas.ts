@@ -169,6 +169,15 @@ export type CourtrackSetEventKind =
   | 'sanction'
   | 'other'
 
+/**
+ * Cómo participa el rival citado en la acción (desde el 2026-09-27):
+ * - `forced_error`: "10-RODAS Fuerza Error de 50-VELASQUEZ": el ataque o el saque le forzó el error;
+ * - `used_block`: "22-MANRIQUE Usa Bloqueo de 21-SOTTO": el ataque salió del bloqueo de ese jugador;
+ * - `blocked`: "6-REYNOSO Del Ataque de 14-TORRES": el bloqueo frenó el ataque de ese jugador;
+ * - `other`: una relación que todavía no conocemos.
+ */
+export type CourtrackEventOpponentRelation = 'forced_error' | 'used_block' | 'blocked' | 'other'
+
 /** Un paso de la progresión de un set: quién hizo qué y cómo quedó el marcador. */
 export type CourtrackSetEvent = {
   /** Marcador después del evento. */
@@ -177,9 +186,25 @@ export type CourtrackSetEvent = {
   /** Equipo protagonista: el que anota o, en los errores, el que lo comete. */
   side: 'a' | 'b'
   kind: CourtrackSetEventKind
+  /** Protagonista: "12-GRASSI" en CourtTrack → `{ number: 12, name: 'Grassi' }`. */
   player: { number: number | null; name: string } | null
-  /** Texto de una sustitución: "Entra #27 Carrion · Sale #17 Rios". */
+  /**
+   * Técnica de la acción ("Punto directo", "Fuerza error de #50 Velasquez Flores", "Ataque a la red") o el texto de
+   * una sustitución ("Entra #27 Carrion · Sale #17 Rios"). Null si CourtTrack no la da (partidos anteriores al 2026-09-27).
+   */
   detail: string | null
+  /** Jugador del OTRO equipo citado en la acción. Null si no hay (o en partidos anteriores al 2026-09-27). */
+  opponent?: { number: number | null; name: string; relation: CourtrackEventOpponentRelation } | null
+}
+
+/** Jugador que estuvo en cancha en un set: formación inicial (líberos incluidos) y los que entraron por cambio. */
+export type CourtrackSetRosterPlayer = {
+  number: number | null
+  /** Apellido abreviado de CourtTrack ("Velasquez F"), el mismo de las estadísticas del partido. */
+  name: string
+  libero: boolean
+  /** En la formación inicial; false si entró por un cambio. */
+  starter: boolean
 }
 
 /** Jugador en la formación inicial de un set. `position` 1–6 es la zona de la rotación; 0, líbero. */
@@ -205,6 +230,8 @@ export type CourtrackSet = {
   stats_b: CourtrackStatLine | null
   lineup_a: CourtrackSetLineupPlayer[]
   lineup_b: CourtrackSetLineupPlayer[]
+  roster_a?: CourtrackSetRosterPlayer[]
+  roster_b?: CourtrackSetRosterPlayer[]
   events: CourtrackSetEvent[]
 }
 
@@ -247,6 +274,11 @@ export type CourtrackPartido = {
   totals_a: CourtrackStatLine | null
   totals_b: CourtrackStatLine | null
   players: CourtrackPlayerStats[]
+  /**
+   * CourtTrack registra la técnica y el rival de cada acción (formato desde el 2026-09-27): solo entonces se sabe a
+   * quién le forzaron el error. En los partidos anteriores `opponent` no existe y los errores forzados son desconocidos.
+   */
+  play_detail?: boolean
 }
 
 export type CourtrackSyncQuota = {
@@ -475,9 +507,12 @@ export type MatchSetEvent = {
   kind: MatchSetEventKind
   player: { number: number | null; name: string } | null
   detail: string | null
+  /** Jugador del otro equipo citado en la acción (a quién se le forzó el error, de quién fue el bloqueo...). */
+  opponent: { number: number | null; name: string; relation: CourtrackEventOpponentRelation } | null
 }
 
 export type MatchSetLineupPlayer = CourtrackSetLineupPlayer
+export type MatchSetRosterPlayer = CourtrackSetRosterPlayer
 
 export type MatchSetStats = {
   number: number
@@ -488,6 +523,8 @@ export type MatchSetStats = {
   stats: Record<MatchSide, MatchStatLine | null>
   /** Formación inicial del equipo propio. */
   lineup: MatchSetLineupPlayer[]
+  /** Jugadores propios que estuvieron en cancha en el set (formación inicial y cambios). */
+  roster: MatchSetRosterPlayer[]
   events: MatchSetEvent[]
 }
 
@@ -503,6 +540,8 @@ export type MatchStats = {
   sets: MatchSetStats[]
   totals: Record<MatchSide, MatchStatLine | null>
   players: MatchPlayerStats[]
+  /** CourtTrack registró técnica y rival de cada acción: se conocen los errores forzados (desde el 2026-09-27). */
+  play_detail: boolean
 }
 
 export const matchListQuery = z.object({
