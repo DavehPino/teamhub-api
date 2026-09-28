@@ -165,6 +165,8 @@ export type CourtrackSetEventKind =
   | 'unforced_error'
   | 'timeout'
   | 'substitution'
+  /** Tarjeta o advertencia (verde, por demora...): no mueve el marcador. */
+  | 'sanction'
   | 'other'
 
 /** Un paso de la progresión de un set: quién hizo qué y cómo quedó el marcador. */
