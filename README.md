@@ -63,6 +63,34 @@ ser miembro de la organización (`org_members`) con `Authorization: Bearer <jwt 
 compartidas (`x-admin-safeword`, `x-flyers-safeword`) solo abren la organización por defecto. En el bucket, la
 organización por defecto conserva sus rutas y las demás viven bajo `orgs/<slug>/`.
 
+### Onboarding de clubes y miembros (app móvil)
+
+La app registra a la persona con Supabase Auth (email y contraseña) y usa su `access_token` como `Authorization: Bearer`.
+Flujo mínimo:
+
+1. **Crear un club** — `POST /api/me/org-create { name }`. Solo cuentas con permiso de creador (hoy lo concede el dueño del
+   servicio con `npm run org-admin -- grant-creator <email> [max_orgs]`; después lo escribirá la pasarela de pago en la tabla
+   `org_creators`). Sin permiso responde **402 `plan_required`** (la app muestra el muro de pago); con el tope alcanzado,
+   409 `org_limit_reached`. El slug sale del nombre; la persona queda como administrador y se crea su equipo propio.
+2. **Invitar** — `POST /api/admin/invite-create { role?, max_uses? }` (cabecera `x-org-slug`) → `{ code: "K7QM-X2PA", … }`.
+   El código **no caduca**, sirve `max_uses` veces (sin límite si se omite) y se puede revocar con `invite-revoke`.
+3. **Unirse** — `POST /api/me/invite-accept { code }` → `{ slug, name, role, already_member }`. Si ya es miembro no gasta un uso.
+4. **Mis clubes** — `GET /api/me/orgs` → `{ orgs: [{ slug, name, role }], can_create_org }`. La app guarda el `slug` del club
+   activo y lo envía en `x-org-slug` en todas las peticiones.
+5. **Invitados** sin cuenta: basta el slug. `GET /api/lookups/org` devuelve el nombre y el tema; el resto de lecturas son públicas.
+
+| Endpoint | Quién | Qué hace |
+|---|---|---|
+| `GET /api/me/orgs` · `POST /api/me/org-create` · `invite-accept` · `org-leave` | Cualquier cuenta con sesión | Ver mis clubes, crear uno, unirse con código, salir (409 `last_admin` si es el único administrador) |
+| `POST /api/admin/members` · `member-role` · `member-remove` | Administrador del club con sesión | Listar miembros, cambiar su rol (`admin`/`coach`), quitarlos. Un club nunca se queda sin administrador |
+| `POST /api/admin/invites` · `invite-create` · `invite-revoke` | Administrador del club con sesión | Listar, crear y revocar códigos |
+| Resto de `POST /api/admin/*` y `/api/flyers/*` | Administrador o entrenador (`coach`) | Cargar datos deportivos |
+
+Las safewords compartidas (web de Coyotes) **no** sirven para gestionar miembros. Para nombrar al primer administrador de un
+club que aún no tiene ninguno (p. ej. Coyotes): `npm run org-admin -- add-member coyotes <email> admin`. `npm run org-admin -- list`
+muestra clubes, miembros y quién puede crear clubes. Borrar un club: `select delete_organization('<uuid>', '<slug>')` (no borra
+sus archivos del bucket ni las cuentas).
+
 ### 5. Desarrollo
 
 ```bash
