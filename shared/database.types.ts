@@ -388,6 +388,7 @@ export type Database = {
       }
       organizations: {
         Row: {
+          courtrack_daily_limit: number | null
           created_at: string
           id: string
           name: string
@@ -396,6 +397,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          courtrack_daily_limit?: number | null
           created_at?: string
           id?: string
           name: string
@@ -404,6 +406,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          courtrack_daily_limit?: number | null
           created_at?: string
           id?: string
           name?: string
