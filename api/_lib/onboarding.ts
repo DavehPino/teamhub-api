@@ -12,6 +12,7 @@ import {
   type MyOrgs,
   type OrgCreateInput,
   type OrgLeaveInput,
+  type OrgThemeInput,
 } from '../../shared/onboarding.js'
 import { delayFailure } from './admin.js'
 import { HttpError, notFound } from './http.js'
@@ -43,6 +44,21 @@ export async function listMyOrgs(userId: string): Promise<MyOrgs> {
   return { orgs, can_create_org: creator !== null && (count ?? 0) < creator.max_orgs }
 }
 
+/** Guarda la marca del club recién creado: los colores en `organizations.theme` y el escudo también en su equipo propio. */
+async function applyTheme(slug: string, theme: OrgThemeInput): Promise<void> {
+  const { data: org, error } = await db()
+    .from('organizations')
+    .update({ theme: Object.fromEntries(Object.entries(theme).filter(([, value]) => value !== undefined)) })
+    .eq('slug', slug)
+    .select('id')
+    .single()
+  if (error) throw error
+  if (theme.logo_url) {
+    const { error: logoError } = await db().from('teams').update({ logo_url: theme.logo_url }).eq('org_id', org.id).eq('is_own_team', true)
+    if (logoError) throw logoError
+  }
+}
+
 /**
  * Crea un club: el usuario queda como administrador y se crea su equipo propio (con el nombre del club). El slug sale del
  * nombre ("Club Los Halcones" → "club-los-halcones") y, si está cogido, se le añade -2, -3…; el usuario no lo ve.
@@ -54,7 +70,10 @@ export async function createMyOrg(userId: string, input: OrgCreateInput): Promis
   for (let attempt = 1; attempt <= SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 1 ? base : `${base.slice(0, SLUG_MAX - 3)}-${attempt}`
     const { error } = await db().rpc('create_organization', { p_user: userId, p_name: input.name, p_slug: slug })
-    if (!error) return { slug, name: input.name, role: 'admin' }
+    if (!error) {
+      if (input.theme) await applyTheme(slug, input.theme)
+      return { slug, name: input.name, role: 'admin' }
+    }
 
     switch (sqlCode(error)) {
       case 'slug_taken':

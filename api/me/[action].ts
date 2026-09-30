@@ -1,7 +1,7 @@
 // /api/me/:action: lo que hace una persona con SU cuenta, antes y fuera de cualquier club (no lleva x-org-slug).
 // Todas exigen `Authorization: Bearer <jwt de Supabase Auth>`.
 //   GET  /api/me/orgs          → MyOrgs { orgs: [{slug, name, role}], can_create_org }
-//   POST /api/me/org-create    { name } → 201 MyOrg. 402 `plan_required` si su cuenta no puede crear clubes (muro de pago),
+//   POST /api/me/org-create    { name, theme?: {primary,accent,accent_2,logo_url} } → 201 MyOrg. 402 `plan_required` si su cuenta no puede crear clubes (muro de pago),
 //                              409 `org_limit_reached` si ya creó todos los que permite.
 //   POST /api/me/invite-accept { code } → JoinedOrg. 404 `invite_invalid`, 409 `invite_exhausted`.
 //   POST /api/me/org-leave     { slug } → { ok: true }. 409 `last_admin` si es el único administrador.

@@ -22,8 +22,20 @@ export const formatInviteCode = (code: string): string => `${code.slice(0, 4)}-$
 
 const inviteCode = z.string().trim().min(1, "Escribe el código").max(24);
 
+const hexColor = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Usa un color como #f5b014");
+
+/** Marca del club: lo que la app usa para teñirse (--club-primary, --club-accent, --club-accent-2) y el escudo. */
+export const orgThemeInput = z.object({
+  primary: hexColor.optional(),
+  accent: hexColor.optional(),
+  accent_2: hexColor.optional(),
+  logo_url: z.url({ protocol: /^https$/, error: "El escudo debe ser una URL https" }).max(500).optional(),
+});
+export type OrgThemeInput = z.infer<typeof orgThemeInput>;
+
 export const orgCreateInput = z.object({
   name: z.string().trim().min(2, "Escribe el nombre del club").max(ORG_NAME_MAX),
+  theme: orgThemeInput.optional(),
 });
 export type OrgCreateInput = z.infer<typeof orgCreateInput>;
 

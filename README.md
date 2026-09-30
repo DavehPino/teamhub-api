@@ -68,7 +68,7 @@ organización por defecto conserva sus rutas y las demás viven bajo `orgs/<slug
 La app registra a la persona con Supabase Auth (email y contraseña) y usa su `access_token` como `Authorization: Bearer`.
 Flujo mínimo:
 
-1. **Crear un club** — `POST /api/me/org-create { name }`. Solo cuentas con permiso de creador (hoy lo concede el dueño del
+1. **Crear un club** — `POST /api/me/org-create { name, theme? }` (`theme`: `primary`, `accent`, `accent_2` en `#rrggbb` y `logo_url` https, todos opcionales). Solo cuentas con permiso de creador (hoy lo concede el dueño del
    servicio con `npm run org-admin -- grant-creator <email> [max_orgs]`; después lo escribirá la pasarela de pago en la tabla
    `org_creators`). Sin permiso responde **402 `plan_required`** (la app muestra el muro de pago); con el tope alcanzado,
    409 `org_limit_reached`. El slug sale del nombre; la persona queda como administrador y se crea su equipo propio.
