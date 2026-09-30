@@ -23,19 +23,27 @@ import {
   videoDeleteInput,
   videoUpdateInput,
 } from '../../shared/schemas.js'
+import { inviteCreateInput, inviteRevokeInput, memberRemoveInput, memberRoleInput } from '../../shared/onboarding.js'
 import { createActivity, deleteActivity, updateActivity } from '../_lib/activities.js'
-import { requireAdmin } from '../_lib/admin.js'
+import { requireAdmin, requireOrgAdmin, type Actor } from '../_lib/admin.js'
 import { getCourtrackCatalog, getCourtrackSyncStatus, runCourtrackSync } from '../_lib/courtrackSync.js'
 import { handle, noStore, parseBody, pathParam, routeFor } from '../_lib/http.js'
 import { createLeague, deleteLeague, getLeagueSnapshot, listLeagues, updateLeague } from '../_lib/leagues.js'
 import { deleteLineup, saveLineup } from '../_lib/lineups.js'
 import { createMatch, deleteMatch, updateMatch } from '../_lib/matches.js'
+import { createInvite, listInvites, listMembers, removeMember, revokeInvite, setMemberRole } from '../_lib/members.js'
 import { createPlayer, deletePlayer, updatePlayer } from '../_lib/players.js'
 import { createTeamLink } from '../_lib/teamLinks.js'
-import { resolveOrg, type OrgHandler } from '../_lib/tenant.js'
+import { resolveOrg, type Org } from '../_lib/tenant.js'
 import { deleteVideo, updateVideo } from '../_lib/videos.js'
 
-const actions: Record<string, OrgHandler> = {
+/** Quién hace la petición: los handlers que no lo necesitan simplemente ignoran el tercer parámetro. */
+type AdminHandler = (request: Request, org: Org, actor: Actor) => Promise<Response>
+
+/** Acciones solo para administradores del club con sesión (no valen las palabras clave ni el rol `coach`). */
+const ADMIN_ONLY = new Set(['members', 'member-role', 'member-remove', 'invites', 'invite-create', 'invite-revoke'])
+
+const actions: Record<string, AdminHandler> = {
   // POST /api/admin/verify → { ok: true } si la palabra clave o la sesión son correctas; 401/403 si no.
   verify: async () => noStore({ ok: true }),
 
@@ -112,6 +120,34 @@ const actions: Record<string, OrgHandler> = {
   'team-link-create': async (request, org) =>
     noStore(await createTeamLink(org, await parseBody(request, teamLinkCreateInput))),
 
+  // POST /api/admin/members → OrgMember[]. Miembros del club (administradores primero). Solo administradores.
+  members: async (_request, org, actor) => noStore(await listMembers(org, requireOrgAdmin(actor))),
+
+  // POST /api/admin/member-role { user_id, role } → { ok: true }. 409 `last_admin` si dejaría el club sin administradores.
+  'member-role': async (request, org) => {
+    await setMemberRole(org, await parseBody(request, memberRoleInput))
+    return noStore({ ok: true })
+  },
+
+  // POST /api/admin/member-remove { user_id } → { ok: true }. 409 `last_admin` si es el único administrador.
+  'member-remove': async (request, org) => {
+    await removeMember(org, await parseBody(request, memberRemoveInput))
+    return noStore({ ok: true })
+  },
+
+  // POST /api/admin/invites → OrgInvite[]. Códigos activos con su número de usos.
+  invites: async (_request, org) => noStore(await listInvites(org)),
+
+  // POST /api/admin/invite-create { role?, max_uses? } → 201 OrgInvite. Código que no caduca; sin max_uses es ilimitado.
+  'invite-create': async (request, org, actor) =>
+    noStore(await createInvite(org, requireOrgAdmin(actor), await parseBody(request, inviteCreateInput)), 201),
+
+  // POST /api/admin/invite-revoke { code } → { ok: true }. Quien ya entró se queda; nadie más puede usar el código.
+  'invite-revoke': async (request, org) => {
+    await revokeInvite(org, await parseBody(request, inviteRevokeInput))
+    return noStore({ ok: true })
+  },
+
   // POST /api/admin/player-create → 201 Player. Alta en el plantel (409 si el número ya lo usa un activo).
   'player-create': async (request, org) =>
     noStore(await createPlayer(org, await parseBody(request, playerCreateInput)), 201),
@@ -138,6 +174,7 @@ const actions: Record<string, OrgHandler> = {
 export const POST = handle(async (request) => {
   const action = routeFor(actions, pathParam(request))
   const org = await resolveOrg(request)
-  await requireAdmin(request, org)
-  return action(request, org)
+  const actor = await requireAdmin(request, org)
+  if (ADMIN_ONLY.has(pathParam(request))) requireOrgAdmin(actor)
+  return action(request, org, actor)
 })

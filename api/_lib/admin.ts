@@ -24,7 +24,8 @@ export type Actor = { kind: 'safeword' } | { kind: 'user'; userId: string; role:
 
 const digest = (value: string) => createHash('sha256').update(value, 'utf8').digest()
 
-const delayFailure = () => new Promise((resolve) => setTimeout(resolve, FAILURE_DELAY_MS))
+/** Pausa ante un intento fallido (contraseña, sesión o código de invitación): encarece probar a ciegas. */
+export const delayFailure = () => new Promise((resolve) => setTimeout(resolve, FAILURE_DELAY_MS))
 
 function safewordFrom(request: Request, header: string): string {
   const raw = request.headers.get(header) ?? ''
@@ -41,13 +42,31 @@ function bearerFrom(request: Request): string | null {
 }
 
 /** Usuario de Supabase Auth dueño del token, o 401. Supabase valida la firma y la caducidad. */
-async function userIdFromToken(token: string): Promise<string> {
+export async function userIdFromToken(token: string): Promise<string> {
   const { data, error } = await db().auth.getUser(token)
   if (error || !data.user) {
     await delayFailure()
     throw unauthorized('Sesión no válida o caducada')
   }
   return data.user.id
+}
+
+/** Usuario autenticado con sesión de Supabase (sin organización): 401 si no hay token o no vale. */
+export async function requireUser(request: Request): Promise<string> {
+  const token = bearerFrom(request)
+  if (!token) throw unauthorized('Inicia sesión para continuar')
+  return userIdFromToken(token)
+}
+
+/**
+ * Solo administradores del club con sesión: gestionar miembros e invitaciones. Las palabras clave compartidas no valen
+ * (no identifican a nadie) y un entrenador (`coach`) tampoco. Devuelve el id del administrador.
+ */
+export function requireOrgAdmin(actor: Actor): string {
+  if (actor.kind !== 'user' || actor.role !== 'admin') {
+    throw forbidden('Solo los administradores del club pueden hacer esto')
+  }
+  return actor.userId
 }
 
 /** Rol del usuario en la organización, o 403 si no es miembro. */

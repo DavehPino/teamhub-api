@@ -357,6 +357,71 @@ export type Database = {
           },
         ]
       }
+      org_creators: {
+        Row: {
+          created_at: string
+          max_orgs: number
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          max_orgs?: number
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          max_orgs?: number
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      org_invites: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          max_uses: number | null
+          org_id: string
+          revoked_at: string | null
+          role: string
+          uses: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          max_uses?: number | null
+          org_id: string
+          revoked_at?: string | null
+          role?: string
+          uses?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          max_uses?: number | null
+          org_id?: string
+          revoked_at?: string | null
+          role?: string
+          uses?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_invites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_members: {
         Row: {
           created_at: string
@@ -390,6 +455,7 @@ export type Database = {
         Row: {
           courtrack_daily_limit: number | null
           created_at: string
+          created_by: string | null
           id: string
           name: string
           slug: string
@@ -399,6 +465,7 @@ export type Database = {
         Insert: {
           courtrack_daily_limit?: number | null
           created_at?: string
+          created_by?: string | null
           id?: string
           name: string
           slug: string
@@ -408,6 +475,7 @@ export type Database = {
         Update: {
           courtrack_daily_limit?: number | null
           created_at?: string
+          created_by?: string | null
           id?: string
           name?: string
           slug?: string
@@ -732,8 +800,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_org_invite: {
+        Args: { p_code: string; p_user: string }
+        Returns: {
+          already_member: boolean
+          name: string
+          org_id: string
+          role: string
+          slug: string
+        }[]
+      }
+      create_organization: {
+        Args: { p_name: string; p_slug: string; p_user: string }
+        Returns: string
+      }
       delete_organization: {
         Args: { p_confirm_slug: string; p_org: string }
+        Returns: undefined
+      }
+      remove_org_member: {
+        Args: { p_org: string; p_user: string }
+        Returns: undefined
+      }
+      set_org_member_role: {
+        Args: { p_org: string; p_role: string; p_user: string }
         Returns: undefined
       }
     }
