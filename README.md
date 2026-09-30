@@ -50,9 +50,18 @@ npm i -g vercel        # CLI de Vercel para `vercel dev` y deploy
 cp .env.example .env.local   # y rellena los valores
 ```
 
-Carga las mismas variables en Vercel → Settings → Environment Variables. Obligatorias: `ORG_ID`, `SUPABASE_URL`,
+Carga las mismas variables en Vercel → Settings → Environment Variables. Obligatorias: `SUPABASE_URL`,
 `SUPABASE_SECRET_KEY`, `S3_BUCKET`, `S3_ACCESS_KEY_ID` y `S3_SECRET_ACCESS_KEY`. `TEAM_PROFILE` describe al equipo
-(deporte, ciudad, colores, tono) para el asistente de flyers.
+(deporte, ciudad, colores, tono) para el asistente de flyers. `DEFAULT_ORG_SLUG` (por defecto `coyotes`) es la
+organización que atiende las peticiones sin cabecera `x-org-slug`.
+
+### Multi-tenant
+
+Cada petición pertenece a una organización (tabla `organizations`). La app móvil envía su slug en `x-org-slug`; la web de
+Coyotes no envía nada y usa la organización por defecto. Las lecturas son públicas (invitados). Las escrituras exigen
+ser miembro de la organización (`org_members`) con `Authorization: Bearer <jwt de Supabase Auth>`; las palabras clave
+compartidas (`x-admin-safeword`, `x-flyers-safeword`) solo abren la organización por defecto. En el bucket, la
+organización por defecto conserva sus rutas y las demás viven bajo `orgs/<slug>/`.
 
 ### 5. Desarrollo
 

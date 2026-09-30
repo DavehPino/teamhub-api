@@ -13,6 +13,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { MATCH_VIDEOS_FOLDER, VIDEO_FILE_EXTENSIONS } from '../../shared/domain.js'
 import { env } from './env.js'
 import { HttpError } from './http.js'
+import type { Org } from './tenant.js'
 
 let client: S3Client | undefined
 
@@ -47,6 +48,22 @@ export async function storage<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Reparto del bucket entre organizaciones. La organización por defecto (Coyotes) conserva sus rutas de siempre para no
+ * mover archivos ya subidos; las demás viven bajo `orgs/<slug>/` con la misma estructura (`games/`, `assets/`).
+ */
+const ORGS_FOLDER = 'orgs'
+
+/** Prefijo de los videos de la organización ("" o S3_VIDEO_PREFIX para la de por defecto). */
+export function orgVideoPrefix(org: Org): string {
+  return org.isDefault ? env.s3.videoPrefix : `${ORGS_FOLDER}/${org.slug}/`
+}
+
+/** Prefijo de la carpeta assets/ (imágenes y flyers) de la organización. */
+export function orgAssetsPrefix(org: Org): string {
+  return org.isDefault ? '' : `${ORGS_FOLDER}/${org.slug}/`
+}
+
 export type BucketVideo = {
   key: string
   size: number | null
@@ -59,9 +76,10 @@ export function isVideoKey(key: string): boolean {
   return VIDEO_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))
 }
 
-/** Lista todos los objetos de video bajo S3_VIDEO_PREFIX (maneja paginación). */
-export async function listBucketVideos(): Promise<BucketVideo[]> {
-  const { bucket, videoPrefix } = env.s3
+/** Lista todos los objetos de video de la organización (maneja paginación). */
+export async function listBucketVideos(org: Org): Promise<BucketVideo[]> {
+  const { bucket } = env.s3
+  const videoPrefix = orgVideoPrefix(org)
   const videos: BucketVideo[] = []
   let token: string | undefined
 
@@ -74,7 +92,10 @@ export async function listBucketVideos(): Promise<BucketVideo[]> {
       }),
     )
     for (const obj of page.Contents ?? []) {
-      if (obj.Key && isVideoKey(obj.Key)) videos.push(toBucketVideo(obj))
+      if (!obj.Key || !isVideoKey(obj.Key)) continue
+      // Sin prefijo propio, la organización por defecto ve todo el bucket: las carpetas de las demás no son suyas.
+      if (org.isDefault && obj.Key.startsWith(`${ORGS_FOLDER}/`)) continue
+      videos.push(toBucketVideo(obj))
     }
     token = page.IsTruncated ? page.NextContinuationToken : undefined
   } while (token)
@@ -132,17 +153,17 @@ export function titleFromKey(key: string): string {
   return file.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || file
 }
 
-/** Carpeta de un partido dentro del bucket: "<prefijo>games/<slug>/". */
-export function matchFolderKey(slug: string): string {
-  return `${env.s3.videoPrefix}${MATCH_VIDEOS_FOLDER}/${slug}/`
+/** Carpeta de un partido dentro del bucket: "<prefijo de la organización>games/<slug>/". */
+export function matchFolderKey(org: Org, slug: string): string {
+  return `${orgVideoPrefix(org)}${MATCH_VIDEOS_FOLDER}/${slug}/`
 }
 
 /**
  * Slug del partido según la carpeta: "<prefijo>games/2026-09-06-vs-onas/set-1.mp4" → "2026-09-06-vs-onas".
  * Devuelve null si el video no está dentro de una carpeta de partido.
  */
-export function matchSlugFromKey(key: string): string | null {
-  const relative = key.slice(env.s3.videoPrefix.length)
+export function matchSlugFromKey(org: Org, key: string): string | null {
+  const relative = key.slice(orgVideoPrefix(org).length)
   const [folder, slug, ...rest] = relative.split('/')
   return folder === MATCH_VIDEOS_FOLDER && slug && rest.length > 0 ? slug : null
 }

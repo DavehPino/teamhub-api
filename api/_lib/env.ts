@@ -41,9 +41,12 @@ export const env = {
   get cronSecret() {
     return optional('CRON_SECRET')
   },
-  /** Organización dueña de los datos (competiciones, ligas de CourtTrack, cupo de syncs). Un solo equipo por deploy hoy. */
-  get orgId() {
-    return required('ORG_ID')
+  /**
+   * Slug de la organización que atiende las peticiones sin cabecera x-org-slug (la web de Coyotes) y la única a la que
+   * dan acceso las palabras clave compartidas. `ORG_ID` se acepta como alias del despliegue de una sola organización.
+   */
+  get defaultOrgSlug() {
+    return optional('DEFAULT_ORG_SLUG') ?? optional('ORG_ID') ?? 'coyotes'
   },
   /**
    * Descripción libre del equipo para el asistente de flyers (deporte, ciudad, mascota, colores, tono).

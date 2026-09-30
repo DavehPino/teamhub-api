@@ -24,6 +24,7 @@ import { toVideo } from './mappers.js'
 import { getMatchRef, type MatchRef } from './matches.js'
 import { headVideo, isVideoKey, matchFolderKey, publicUrlFor, s3, storage } from './storage.js'
 import { db } from './supabase.js'
+import type { Org } from './tenant.js'
 
 /** 25 MiB por trozo: pocos reintentos caros en redes móviles y muy por debajo de 10.000 trozos. */
 const PART_SIZE = 25 * 1024 * 1024
@@ -31,15 +32,15 @@ const PART_SIZE = 25 * 1024 * 1024
 const PART_URL_TTL_SECONDS = 6 * 60 * 60
 const MAX_NAME_ATTEMPTS = 100
 
-async function requireMatch(matchId: string): Promise<MatchRef> {
-  const match = await getMatchRef(matchId)
+async function requireMatch(org: Org, matchId: string): Promise<MatchRef> {
+  const match = await getMatchRef(org, matchId)
   if (!match) throw notFound('Partido no encontrado')
   return match
 }
 
 /** La clave tiene que estar dentro de la carpeta del partido: impide escribir en otras rutas. */
-function assertKeyInMatch(key: string, match: MatchRef): void {
-  const folder = matchFolderKey(match.slug)
+function assertKeyInMatch(org: Org, key: string, match: MatchRef): void {
+  const folder = matchFolderKey(org, match.slug)
   const file = key.slice(folder.length)
   if (!key.startsWith(folder) || !file || file.includes('/') || !isVideoKey(file)) {
     throw badRequest('El archivo no pertenece a este partido')
@@ -55,13 +56,13 @@ function splitFileName(fileName: string): { stem: string; ext: string } {
 }
 
 /** Primera clave libre en la carpeta del partido: set-1.mp4, set-1-2.mp4... */
-async function freeKey(match: MatchRef, fileName: string): Promise<string> {
-  const folder = matchFolderKey(match.slug)
+async function freeKey(org: Org, match: MatchRef, fileName: string): Promise<string> {
+  const folder = matchFolderKey(org, match.slug)
   const { stem, ext } = splitFileName(fileName)
 
   const [objects, rows] = await Promise.all([
     storage(() => s3().send(new ListObjectsV2Command({ Bucket: env.s3.bucket, Prefix: folder }))),
-    db().from('videos').select('storage_key').like('storage_key', `${folder}%`),
+    db().from('videos').select('storage_key').eq('org_id', org.id).like('storage_key', `${folder}%`),
   ])
   if (rows.error) throw rows.error
   const taken = new Set([
@@ -76,12 +77,12 @@ async function freeKey(match: MatchRef, fileName: string): Promise<string> {
   throw conflict('Hay demasiados archivos con ese nombre en el partido. Renombra el video.')
 }
 
-export async function startVideoUpload(input: UploadStartInput): Promise<UploadStart> {
+export async function startVideoUpload(org: Org, input: UploadStartInput): Promise<UploadStart> {
   if (!isVideoKey(input.file_name)) {
     throw badRequest('Formato no admitido. Usa MP4, MOV, M4V, WEBM o MKV.')
   }
-  const match = await requireMatch(input.match_id)
-  const key = await freeKey(match, input.file_name)
+  const match = await requireMatch(org, input.match_id)
+  const key = await freeKey(org, match, input.file_name)
   const bucket = env.s3.bucket
 
   const created = await storage(() =>
@@ -115,9 +116,9 @@ export async function startVideoUpload(input: UploadStartInput): Promise<UploadS
 }
 
 /** Cierra la subida multiparte y registra el video, ya vinculado al partido. */
-export async function completeVideoUpload(input: UploadCompleteInput): Promise<Video> {
-  const match = await requireMatch(input.match_id)
-  assertKeyInMatch(input.key, match)
+export async function completeVideoUpload(org: Org, input: UploadCompleteInput): Promise<Video> {
+  const match = await requireMatch(org, input.match_id)
+  assertKeyInMatch(org, input.key, match)
   const bucket = env.s3.bucket
 
   const parts = [...input.parts].sort((a, b) => a.part_number - b.part_number)
@@ -138,6 +139,7 @@ export async function completeVideoUpload(input: UploadCompleteInput): Promise<V
     .from('videos')
     .upsert(
       {
+        org_id: org.id,
         source: 'bucket',
         storage_key: input.key,
         url: publicUrlFor(input.key),
@@ -161,9 +163,9 @@ export async function completeVideoUpload(input: UploadCompleteInput): Promise<V
 }
 
 /** Descarta los trozos ya subidos de una subida cancelada o fallida. */
-export async function abortVideoUpload(input: UploadAbortInput): Promise<void> {
-  const match = await requireMatch(input.match_id)
-  assertKeyInMatch(input.key, match)
+export async function abortVideoUpload(org: Org, input: UploadAbortInput): Promise<void> {
+  const match = await requireMatch(org, input.match_id)
+  assertKeyInMatch(org, input.key, match)
   try {
     await storage(() =>
       s3().send(new AbortMultipartUploadCommand({ Bucket: env.s3.bucket, Key: input.key, UploadId: input.upload_id })),

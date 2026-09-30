@@ -96,6 +96,12 @@ export const ADMIN_SAFEWORD_HEADER = "x-admin-safeword";
 /** Cabecera con la palabra clave de la sección Flyers (FLYERS_SAFEWORD), distinta de la de carga. */
 export const FLYERS_SAFEWORD_HEADER = "x-flyers-safeword";
 
+/**
+ * Cabecera con el slug de la organización (organizations.slug). La web de Coyotes no la envía y cae en la
+ * organización por defecto; la app móvil la manda en cada petición.
+ */
+export const ORG_SLUG_HEADER = "x-org-slug";
+
 /** Posición de un jugador (tabla players). Debe coincidir con los CHECK `players_*_position_check`. */
 export const PLAYER_POSITIONS = [
   "armador",

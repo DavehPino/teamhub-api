@@ -1,6 +1,6 @@
 // Proxy al microservicio courtrack-service (repo aparte, mismo Supabase): el navegador solo habla con /api y el
 // token del servicio nunca sale del servidor. Los errores del servicio se reenvían con su mismo código y mensaje.
-// Todas las llamadas llevan la organización de este deploy (ORG_ID).
+// Las llamadas por organización llevan su slug como `org_id` (el texto que courtrack-service guarda en sus tablas).
 import type {
   ApiErrorBody,
   CourtrackCatalogInput,
@@ -16,6 +16,7 @@ import type {
 import { env } from './env.js'
 import { HttpError } from './http.js'
 import { getOwnTeam } from './teams.js'
+import type { Org } from './tenant.js'
 
 /** Margen por debajo del maxDuration de api/admin/[action].ts (60 s). */
 const TIMEOUT_MS = 55_000
@@ -67,26 +68,26 @@ async function callSyncService<T>({ method, path, query, body }: Call): Promise<
 }
 
 /** Cupo restante, ligas configuradas y últimas sincronizaciones de la organización. */
-export const getCourtrackSyncStatus = () =>
-  callSyncService<CourtrackSyncStatus>({ method: 'GET', path: '/api/sync', query: { org_id: env.orgId } })
+export const getCourtrackSyncStatus = (org: Org) =>
+  callSyncService<CourtrackSyncStatus>({ method: 'GET', path: '/api/sync', query: { org_id: org.slug } })
 
 /** Sincroniza una temporada (`leagueId`) o todas las ligas activas (`null`), o lo simula con `dry_run`. */
-export const runCourtrackSync = (leagueId: string | null, dryRun: boolean) =>
+export const runCourtrackSync = (org: Org, leagueId: string | null, dryRun: boolean) =>
   callSyncService<CourtrackSyncResult | CourtrackSyncAllResult>({
     method: 'POST',
     path: '/api/sync',
-    body: { org_id: env.orgId, ...(leagueId ? { league_id: leagueId } : {}), dry_run: dryRun },
+    body: { org_id: org.slug, ...(leagueId ? { league_id: leagueId } : {}), dry_run: dryRun },
   })
 
 /**
  * Catálogo de CourtTrack para el asistente "Agregar liga". En `descubrir`, el equipo buscado es siempre el propio de
  * la organización (teams.is_own_team): el cliente no puede buscar otro nombre.
  */
-export async function getCourtrackCatalog(input: CourtrackCatalogInput) {
+export async function getCourtrackCatalog(org: Org, input: CourtrackCatalogInput) {
   const query: Record<string, string> = {}
   if ('id_cliente' in input) query.id_cliente = String(input.id_cliente)
   if ('liga_id' in input) query.liga_id = String(input.liga_id)
-  if (input.resource === 'descubrir') query.team = (await getOwnTeam()).name
+  if (input.resource === 'descubrir') query.team = (await getOwnTeam(org)).name
   return callSyncService<CourtrackCliente[] | CourtrackLiga[] | CourtrackEquipo[] | CourtrackDiscoveredLiga[]>({
     method: 'GET',
     path: `/api/courtrack/${input.resource}`,

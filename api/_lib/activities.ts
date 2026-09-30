@@ -11,12 +11,14 @@ import { badRequest, notFound } from './http.js'
 import { TEAM_SUMMARY_SELECT, toActivity } from './mappers.js'
 import { db } from './supabase.js'
 import { discardCreatedTeam, resolveOpponent } from './teams.js'
+import type { Org } from './tenant.js'
 
 /** Actividades no canceladas desde `from` (incluido), de la más próxima a la más lejana. */
-export async function listUpcomingActivities(from: string, limit: number): Promise<Activity[]> {
+export async function listUpcomingActivities(org: Org, from: string, limit: number): Promise<Activity[]> {
   const { data, error } = await db()
     .from('weekly_activities')
     .select(`*, opponent:teams!weekly_activities_opponent_team_id_fkey(${TEAM_SUMMARY_SELECT})`)
+    .eq('org_id', org.id)
     .gte('activity_date', from)
     .eq('is_cancelled', false)
     .order('activity_date', { ascending: true })
@@ -37,13 +39,14 @@ function assertUpcoming(activityDate: string): void {
  * Crea una actividad futura y, si se pide, su rival. El formulario no tiene tipo ni hora de fin:
  * se guardan como 'otro' y null. Si la actividad no se guarda, el rival recién creado se borra.
  */
-export async function createActivity(input: ActivityCreateInput): Promise<Activity> {
+export async function createActivity(org: Org, input: ActivityCreateInput): Promise<Activity> {
   assertUpcoming(input.activity_date)
 
-  const resolved = await resolveOpponent(input.opponent)
+  const resolved = await resolveOpponent(org, input.opponent)
   const { data, error } = await db()
     .from('weekly_activities')
     .insert({
+      org_id: org.id,
       title: input.title,
       description: input.description,
       activity_date: input.activity_date,
@@ -58,7 +61,7 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
     .select('*')
     .single()
   if (error) {
-    await discardCreatedTeam(resolved)
+    await discardCreatedTeam(org, resolved)
     throw error
   }
   return toActivity(data, resolved.team)
@@ -68,12 +71,13 @@ export async function createActivity(input: ActivityCreateInput): Promise<Activi
  * Edita una actividad con los campos del formulario. El tipo no se toca y la hora de fin (de las cargadas a mano)
  * se conserva solo si sigue siendo posterior a la de inicio. Si falla, el rival recién creado se borra.
  */
-export async function updateActivity(input: ActivityUpdateInput): Promise<Activity> {
+export async function updateActivity(org: Org, input: ActivityUpdateInput): Promise<Activity> {
   assertUpcoming(input.activity_date)
   const { data: current, error: currentError } = await db()
     .from('weekly_activities')
     .select('id,end_time')
     .eq('id', input.id)
+    .eq('org_id', org.id)
     .maybeSingle()
   if (currentError) throw currentError
   if (!current) throw notFound('Actividad no encontrada')
@@ -81,7 +85,7 @@ export async function updateActivity(input: ActivityUpdateInput): Promise<Activi
   // "HH:MM:SS" frente a "HH:MM": se comparan como texto con los segundos a cero.
   const endTime = current.end_time && current.end_time > `${input.start_time}:00` ? current.end_time : null
 
-  const resolved = await resolveOpponent(input.opponent)
+  const resolved = await resolveOpponent(org, input.opponent)
   const { data, error } = await db()
     .from('weekly_activities')
     .update({
@@ -95,18 +99,24 @@ export async function updateActivity(input: ActivityUpdateInput): Promise<Activi
       opponent_team_id: resolved.team?.id ?? null,
     })
     .eq('id', input.id)
+    .eq('org_id', org.id)
     .select('*')
     .single()
   if (error) {
-    await discardCreatedTeam(resolved)
+    await discardCreatedTeam(org, resolved)
     throw error
   }
   return toActivity(data, resolved.team)
 }
 
 /** Borra la actividad. Los partidos y videos que la referencian quedan sin actividad (on delete set null). */
-export async function deleteActivity(input: ActivityDeleteInput): Promise<void> {
-  const { data, error } = await db().from('weekly_activities').delete().eq('id', input.id).select('id')
+export async function deleteActivity(org: Org, input: ActivityDeleteInput): Promise<void> {
+  const { data, error } = await db()
+    .from('weekly_activities')
+    .delete()
+    .eq('id', input.id)
+    .eq('org_id', org.id)
+    .select('id')
   if (error) throw error
   if (data.length === 0) throw notFound('Actividad no encontrada')
 }

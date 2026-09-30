@@ -5,16 +5,20 @@
 //   /api/lookups/lineups      → Lineup[] con sus jugadores en cancha (la más reciente primero)
 // Sin caché: el formulario de alta tiene que ver al instante un equipo o una competición recién creados.
 import { listCompetitions } from '../_lib/competitions.js'
-import { handle, noStore, pathParam, routeFor, type Handler } from '../_lib/http.js'
+import { handle, noStore, pathParam, routeFor } from '../_lib/http.js'
 import { listLineups } from '../_lib/lineups.js'
 import { listPlayers } from '../_lib/players.js'
 import { listRivalTeams } from '../_lib/teams.js'
+import { resolveOrg, type OrgHandler } from '../_lib/tenant.js'
 
-const resources: Record<string, Handler> = {
-  teams: async () => noStore(await listRivalTeams()),
-  competitions: async () => noStore(await listCompetitions()),
-  players: async () => noStore(await listPlayers()),
-  lineups: async () => noStore(await listLineups()),
+const resources: Record<string, OrgHandler> = {
+  teams: async (_request, org) => noStore(await listRivalTeams(org)),
+  competitions: async (_request, org) => noStore(await listCompetitions(org)),
+  players: async (_request, org) => noStore(await listPlayers(org)),
+  lineups: async (_request, org) => noStore(await listLineups(org)),
 }
 
-export const GET = handle(async (request) => routeFor(resources, pathParam(request))(request))
+export const GET = handle(async (request) => {
+  const resource = routeFor(resources, pathParam(request))
+  return resource(request, await resolveOrg(request))
+})

@@ -1,5 +1,6 @@
 // Biblioteca de la sección Flyers en el bucket, carpeta assets/ (fuera de la de videos: el cron solo registra
 // extensiones de video, así que no las toca). Nada va a la base de datos: cada elemento es su archivo más un JSON.
+// Cada organización tiene su propia carpeta (orgAssetsPrefix): la de por defecto conserva `assets/` en la raíz.
 //   assets/images/<id>.webp|png  + assets/images/<id>.json  → { id, name, contentType, createdAt }
 //   assets/flyers/<id>.png       + assets/flyers/<id>.json  → { id, savedAt, source, label, flyer }
 // Los archivos los sube el navegador directo al bucket con una URL firmada (Vercel limita el cuerpo a 4,5 MB);
@@ -30,11 +31,12 @@ import {
 } from '../../shared/flyers.js'
 import { env } from './env.js'
 import { badRequest, conflict, notFound } from './http.js'
-import { deleteObject, listObjectKeys, publicUrlFor, s3, storage } from './storage.js'
+import { deleteObject, listObjectKeys, orgAssetsPrefix, publicUrlFor, s3, storage } from './storage.js'
+import type { Org } from './tenant.js'
 
 const ASSETS_FOLDER = 'assets'
-const IMAGES = `${ASSETS_FOLDER}/images/`
-const FLYERS = `${ASSETS_FOLDER}/flyers/`
+const imagesFolder = (org: Org) => `${orgAssetsPrefix(org)}${ASSETS_FOLDER}/images/`
+const flyersFolder = (org: Org) => `${orgAssetsPrefix(org)}${ASSETS_FOLDER}/flyers/`
 
 const EXTENSIONS: Record<string, string> = { 'image/webp': '.webp', 'image/png': '.png' }
 /** Tiempo para completar la subida tras pedir la URL. */
@@ -57,8 +59,9 @@ const flyerMeta = z.object({
 })
 type FlyerMeta = z.infer<typeof flyerMeta>
 
-const imageFile = (meta: Pick<ImageMeta, 'id' | 'contentType'>) => `${IMAGES}${meta.id}${EXTENSIONS[meta.contentType]}`
-const flyerFile = (id: string) => `${FLYERS}${id}.png`
+const imageFile = (org: Org, meta: Pick<ImageMeta, 'id' | 'contentType'>) =>
+  `${imagesFolder(org)}${meta.id}${EXTENSIONS[meta.contentType]}`
+const flyerFile = (org: Org, id: string) => `${flyersFolder(org)}${id}.png`
 const metaKey = (folder: string, id: string) => `${folder}${id}.json`
 
 const newId = (prefix: string) => `${prefix}_${randomBytes(8).toString('hex')}`
@@ -116,44 +119,44 @@ async function sizeOf(key: string): Promise<number | null> {
 const metaIds = async (folder: string) =>
   (await listObjectKeys(folder)).filter((key) => key.endsWith('.json')).map((key) => key.slice(folder.length, -5))
 
-async function readImage(id: string): Promise<ImageMeta | null> {
-  return readJson(metaKey(IMAGES, id), imageMeta)
+async function readImage(org: Org, id: string): Promise<ImageMeta | null> {
+  return readJson(metaKey(imagesFolder(org), id), imageMeta)
 }
 
-async function toImage(meta: ImageMeta): Promise<FlyerImage> {
-  return { id: meta.id, name: meta.name, createdAt: meta.createdAt, url: await readUrl(imageFile(meta)) }
+async function toImage(org: Org, meta: ImageMeta): Promise<FlyerImage> {
+  return { id: meta.id, name: meta.name, createdAt: meta.createdAt, url: await readUrl(imageFile(org, meta)) }
 }
 
-async function toSavedFlyer(meta: FlyerMeta): Promise<SavedFlyer> {
-  return { ...meta, imageUrl: await readUrl(flyerFile(meta.id)) }
+async function toSavedFlyer(org: Org, meta: FlyerMeta): Promise<SavedFlyer> {
+  return { ...meta, imageUrl: await readUrl(flyerFile(org, meta.id)) }
 }
 
-export async function getFlyerLibrary(): Promise<FlyerLibrary> {
-  const [imageIds, flyerIds] = await Promise.all([metaIds(IMAGES), metaIds(FLYERS)])
+export async function getFlyerLibrary(org: Org): Promise<FlyerLibrary> {
+  const [imageIds, flyerIds] = await Promise.all([metaIds(imagesFolder(org)), metaIds(flyersFolder(org))])
   const [images, flyers] = await Promise.all([
-    Promise.all(imageIds.map((id) => readImage(id))),
-    Promise.all(flyerIds.map((id) => readJson(metaKey(FLYERS, id), flyerMeta))),
+    Promise.all(imageIds.map((id) => readImage(org, id))),
+    Promise.all(flyerIds.map((id) => readJson(metaKey(flyersFolder(org), id), flyerMeta))),
   ])
   return {
     images: await Promise.all(
       images
         .filter((meta): meta is ImageMeta => meta !== null)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .map(toImage),
+        .map((meta) => toImage(org, meta)),
     ),
     flyers: await Promise.all(
       flyers
         .filter((meta): meta is FlyerMeta => meta !== null)
         .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
-        .map(toSavedFlyer),
+        .map((meta) => toSavedFlyer(org, meta)),
     ),
   }
 }
 
 /** Firma la subida de un archivo nuevo. El id lo pone el servidor: el navegador no elige dónde escribe. */
-export async function createUploadUrl(input: FlyerUploadUrlInput): Promise<FlyerUploadUrl> {
+export async function createUploadUrl(org: Org, input: FlyerUploadUrlInput): Promise<FlyerUploadUrl> {
   const id = newId(input.kind === 'image' ? 'asset' : 'flyer')
-  const key = input.kind === 'image' ? imageFile({ id, contentType: input.contentType }) : flyerFile(id)
+  const key = input.kind === 'image' ? imageFile(org, { id, contentType: input.contentType }) : flyerFile(org, id)
   const url = await storage(() =>
     getSignedUrl(s3(), new PutObjectCommand({ Bucket: env.s3.bucket, Key: key, ContentType: input.contentType }), {
       expiresIn: UPLOAD_URL_TTL_SECONDS,
@@ -172,46 +175,46 @@ async function assertUploaded(key: string, maxBytes: number, what: string): Prom
   }
 }
 
-export async function saveImage(input: FlyerImageSaveInput): Promise<FlyerImage> {
-  const file = imageFile(input)
-  if ((await metaIds(IMAGES)).length >= FLYER_MAX_ASSETS) {
+export async function saveImage(org: Org, input: FlyerImageSaveInput): Promise<FlyerImage> {
+  const file = imageFile(org, input)
+  if ((await metaIds(imagesFolder(org))).length >= FLYER_MAX_ASSETS) {
     await deleteObject(file)
     throw conflict(`Ya hay ${FLYER_MAX_ASSETS} imágenes. Borra alguna para subir otra.`)
   }
   await assertUploaded(file, FLYER_IMAGE_MAX_BYTES, 'La imagen')
   const meta: ImageMeta = { id: input.id, name: input.name, contentType: input.contentType, createdAt: new Date().toISOString() }
-  await writeJson(metaKey(IMAGES, input.id), meta)
-  return toImage(meta)
+  await writeJson(metaKey(imagesFolder(org), input.id), meta)
+  return toImage(org, meta)
 }
 
-export async function renameImage(input: FlyerImageRenameInput): Promise<FlyerImage> {
-  const meta = await readImage(input.id)
+export async function renameImage(org: Org, input: FlyerImageRenameInput): Promise<FlyerImage> {
+  const meta = await readImage(org, input.id)
   if (!meta) throw notFound('Imagen no encontrada')
   const next = { ...meta, name: input.name }
-  await writeJson(metaKey(IMAGES, input.id), next)
-  return toImage(next)
+  await writeJson(metaKey(imagesFolder(org), input.id), next)
+  return toImage(org, next)
 }
 
-export async function deleteImage(input: FlyerImageDeleteInput): Promise<void> {
-  const meta = await readImage(input.id)
+export async function deleteImage(org: Org, input: FlyerImageDeleteInput): Promise<void> {
+  const meta = await readImage(org, input.id)
   // Primero el JSON: la imagen desaparece de la biblioteca aunque falle el borrado del archivo.
-  await deleteObject(metaKey(IMAGES, input.id))
-  if (meta) await deleteObject(imageFile(meta))
+  await deleteObject(metaKey(imagesFolder(org), input.id))
+  if (meta) await deleteObject(imageFile(org, meta))
 }
 
-export async function saveFlyer(input: SavedFlyerSaveInput): Promise<SavedFlyer> {
-  const file = flyerFile(input.id)
-  if ((await metaIds(FLYERS)).length >= SAVED_FLYERS_LIMIT) {
+export async function saveFlyer(org: Org, input: SavedFlyerSaveInput): Promise<SavedFlyer> {
+  const file = flyerFile(org, input.id)
+  if ((await metaIds(flyersFolder(org))).length >= SAVED_FLYERS_LIMIT) {
     await deleteObject(file)
     throw conflict(`Ya hay ${SAVED_FLYERS_LIMIT} flyers guardados. Borra alguno para guardar otro.`)
   }
   await assertUploaded(file, FLYER_PNG_MAX_BYTES, 'El flyer')
   const meta: FlyerMeta = { ...input, savedAt: new Date().toISOString() }
-  await writeJson(metaKey(FLYERS, input.id), meta)
-  return toSavedFlyer(meta)
+  await writeJson(metaKey(flyersFolder(org), input.id), meta)
+  return toSavedFlyer(org, meta)
 }
 
-export async function deleteFlyer(input: SavedFlyerDeleteInput): Promise<void> {
-  await deleteObject(metaKey(FLYERS, input.id))
-  await deleteObject(flyerFile(input.id))
+export async function deleteFlyer(org: Org, input: SavedFlyerDeleteInput): Promise<void> {
+  await deleteObject(metaKey(flyersFolder(org), input.id))
+  await deleteObject(flyerFile(org, input.id))
 }

@@ -11,12 +11,18 @@ import type {
 import { getCourtrackPartido } from './courtrackSync.js'
 import { HttpError } from './http.js'
 import { db } from './supabase.js'
+import type { Org } from './tenant.js'
 
 type Side = 'a' | 'b'
 
 /** Null si el partido no existe. 404 `no_stats` si no viene de CourtTrack. */
-export async function getMatchStatsBySlug(slug: string): Promise<MatchStats | null> {
-  const { data, error } = await db().from('matches').select('id,is_home,courtrack_id').eq('slug', slug).maybeSingle()
+export async function getMatchStatsBySlug(org: Org, slug: string): Promise<MatchStats | null> {
+  const { data, error } = await db()
+    .from('matches')
+    .select('id,is_home,courtrack_id')
+    .eq('org_id', org.id)
+    .eq('slug', slug)
+    .maybeSingle()
   if (error) throw error
   if (!data) return null
 

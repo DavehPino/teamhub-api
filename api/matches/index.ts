@@ -4,8 +4,10 @@ import { todayIsoDate } from '../../shared/dates.js'
 import { matchListQuery } from '../../shared/schemas.js'
 import { cached, handle, parseQuery } from '../_lib/http.js'
 import { listMatchesUntil } from '../_lib/matches.js'
+import { resolveOrg } from '../_lib/tenant.js'
 
 export const GET = handle(async (request) => {
+  const org = await resolveOrg(request)
   const { until, limit, competition_id, courtrack_league_id } = parseQuery(request, matchListQuery)
-  return cached(await listMatchesUntil(until ?? todayIsoDate(), limit, competition_id, courtrack_league_id))
+  return cached(await listMatchesUntil(org, until ?? todayIsoDate(), limit, competition_id, courtrack_league_id))
 })

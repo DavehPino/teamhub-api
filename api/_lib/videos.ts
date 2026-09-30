@@ -11,21 +11,23 @@ import {
   titleFromKey,
 } from './storage.js'
 import { db, type Tables } from './supabase.js'
+import type { Org } from './tenant.js'
 
 type VideoInsert = Tables['videos']['Insert']
 
-export async function getVideoById(id: string): Promise<Video | null> {
-  const { data, error } = await db().from('videos').select('*').eq('id', id).maybeSingle()
+export async function getVideoById(org: Org, id: string): Promise<Video | null> {
+  const { data, error } = await db().from('videos').select('*').eq('id', id).eq('org_id', org.id).maybeSingle()
   if (error) throw error
   return data ? toVideo(data) : null
 }
 
 /** Cambia el título y el set de un video. */
-export async function updateVideo(input: VideoUpdateInput): Promise<Video> {
+export async function updateVideo(org: Org, input: VideoUpdateInput): Promise<Video> {
   const { data, error } = await db()
     .from('videos')
     .update({ title: input.title, set_number: input.set_number })
     .eq('id', input.id)
+    .eq('org_id', org.id)
     .select('*')
     .maybeSingle()
   if (error) throw error
@@ -37,12 +39,12 @@ export async function updateVideo(input: VideoUpdateInput): Promise<Video> {
  * Borra un video: primero el archivo del bucket y después la fila. En ese orden, si el bucket falla la fila sigue
  * ahí; al revés, la sincronización volvería a crear la fila a partir del archivo que quedó.
  */
-export async function deleteVideo(input: VideoDeleteInput): Promise<void> {
-  const video = await getVideoById(input.id)
+export async function deleteVideo(org: Org, input: VideoDeleteInput): Promise<void> {
+  const video = await getVideoById(org, input.id)
   if (!video) throw notFound('Video no encontrado')
   if (video.source === 'bucket' && video.storage_key) await deleteObject(video.storage_key)
 
-  const { error } = await db().from('videos').delete().eq('id', video.id)
+  const { error } = await db().from('videos').delete().eq('id', video.id).eq('org_id', org.id)
   if (error) throw error
 }
 
@@ -68,21 +70,22 @@ export function setNumberFromKey(key: string): number | null {
 const BATCH_SIZE = 200
 
 /**
- * Sincroniza la tabla `videos` con los objetos del bucket. Idempotente:
+ * Sincroniza la tabla `videos` de una organización con los objetos de su parte del bucket. Idempotente:
  * - clave nueva → fila `pending` (o `ready` y vinculada si está en games/<slug>/)
  * - clave existente → refresca tamaño, URL y last_synced_at, y vincula si aún no tiene partido
  * - clave desaparecida → se cuenta, no se borra
  * Nunca pisa metadata editada a mano (título, categoría, estado, set...).
  */
-export async function syncBucketVideos(): Promise<SyncResult> {
-  const objects = await listBucketVideos()
+export async function syncBucketVideos(org: Org): Promise<SyncResult> {
+  const objects = await listBucketVideos(org)
   const now = new Date().toISOString()
 
   const [{ data: matchRows, error: matchesError }, { data: existingRows, error: videosError }] = await Promise.all([
-    db().from('matches').select('id,slug,played_on'),
+    db().from('matches').select('id,slug,played_on').eq('org_id', org.id),
     db()
       .from('videos')
       .select('id,storage_key,title,category,status,match_id,set_number,recorded_on,content_type')
+      .eq('org_id', org.id)
       .eq('source', 'bucket'),
   ])
   if (matchesError) throw matchesError
@@ -102,12 +105,13 @@ export async function syncBucketVideos(): Promise<SyncResult> {
   const rows: VideoInsert[] = []
 
   for (const obj of objects) {
-    const slug = matchSlugFromKey(obj.key)
+    const slug = matchSlugFromKey(org, obj.key)
     const match = slug ? matchesBySlug.get(slug) : undefined
     const existing = existingByKey.get(obj.key)
 
     if (!existing) {
       const row: VideoInsert = {
+        org_id: org.id,
         source: 'bucket',
         storage_key: obj.key,
         title: titleFromKey(obj.key),
@@ -135,6 +139,7 @@ export async function syncBucketVideos(): Promise<SyncResult> {
 
     // Fila existente: solo se refrescan los datos que vienen del bucket.
     const row: VideoInsert = {
+      org_id: org.id,
       source: 'bucket',
       storage_key: obj.key,
       title: existing.title,

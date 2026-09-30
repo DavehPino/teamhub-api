@@ -21,6 +21,7 @@ export type Database = {
           kind: string
           name: string
           org_id: string
+          organization_id: string
           updated_at: string
         }
         Insert: {
@@ -29,6 +30,7 @@ export type Database = {
           kind?: string
           name: string
           org_id: string
+          organization_id?: string
           updated_at?: string
         }
         Update: {
@@ -37,9 +39,18 @@ export type Database = {
           kind?: string
           name?: string
           org_id?: string
+          organization_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "competitions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       courtrack_leagues: {
         Row: {
@@ -56,6 +67,7 @@ export type Database = {
           liga_id: number
           liga_name: string
           org_id: string
+          organization_id: string
           season_label: string
           snapshot_at: string | null
           standings: Json | null
@@ -77,6 +89,7 @@ export type Database = {
           liga_id: number
           liga_name: string
           org_id: string
+          organization_id?: string
           season_label: string
           snapshot_at?: string | null
           standings?: Json | null
@@ -98,6 +111,7 @@ export type Database = {
           liga_id?: number
           liga_name?: string
           org_id?: string
+          organization_id?: string
           season_label?: string
           snapshot_at?: string | null
           standings?: Json | null
@@ -113,6 +127,13 @@ export type Database = {
             referencedRelation: "competitions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "courtrack_leagues_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       courtrack_team_links: {
@@ -122,6 +143,7 @@ export type Database = {
           id: string
           normalized_name: string
           org_id: string
+          organization_id: string
           team_id: string
         }
         Insert: {
@@ -130,6 +152,7 @@ export type Database = {
           id?: string
           normalized_name: string
           org_id: string
+          organization_id?: string
           team_id: string
         }
         Update: {
@@ -138,9 +161,17 @@ export type Database = {
           id?: string
           normalized_name?: string
           org_id?: string
+          organization_id?: string
           team_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "courtrack_team_links_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "courtrack_team_links_team_id_fkey"
             columns: ["team_id"]
@@ -192,6 +223,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          org_id: string
           updated_at: string
         }
         Insert: {
@@ -199,6 +231,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          org_id?: string
           updated_at?: string
         }
         Update: {
@@ -206,9 +239,18 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          org_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "lineups_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       matches: {
         Row: {
@@ -222,6 +264,7 @@ export type Database = {
           is_home: boolean
           location: string | null
           opponent_team_id: string
+          org_id: string
           phase: string | null
           played_on: string
           set_scores: Json
@@ -243,6 +286,7 @@ export type Database = {
           is_home?: boolean
           location?: string | null
           opponent_team_id: string
+          org_id?: string
           phase?: string | null
           played_on: string
           set_scores?: Json
@@ -264,6 +308,7 @@ export type Database = {
           is_home?: boolean
           location?: string | null
           opponent_team_id?: string
+          org_id?: string
           phase?: string | null
           played_on?: string
           set_scores?: Json
@@ -303,7 +348,70 @@ export type Database = {
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "matches_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      org_members: {
+        Row: {
+          created_at: string
+          org_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          org_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          org_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          slug: string
+          theme: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+          theme?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+          theme?: Json
+          updated_at?: string
+        }
+        Relationships: []
       }
       players: {
         Row: {
@@ -312,6 +420,7 @@ export type Database = {
           is_active: boolean
           jersey_number: number | null
           name: string
+          org_id: string
           primary_position: string
           secondary_position: string | null
           updated_at: string
@@ -322,6 +431,7 @@ export type Database = {
           is_active?: boolean
           jersey_number?: number | null
           name: string
+          org_id?: string
           primary_position: string
           secondary_position?: string | null
           updated_at?: string
@@ -332,11 +442,20 @@ export type Database = {
           is_active?: boolean
           jersey_number?: number | null
           name?: string
+          org_id?: string
           primary_position?: string
           secondary_position?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "players_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sync_log: {
         Row: {
@@ -346,6 +465,7 @@ export type Database = {
           finished_at: string | null
           id: string
           org_id: string
+          organization_id: string
           result: Json | null
           source: string
           started_at: string
@@ -358,6 +478,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           org_id: string
+          organization_id?: string
           result?: Json | null
           source?: string
           started_at?: string
@@ -370,6 +491,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           org_id?: string
+          organization_id?: string
           result?: Json | null
           source?: string
           started_at?: string
@@ -383,6 +505,13 @@ export type Database = {
             referencedRelation: "courtrack_leagues"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sync_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       teams: {
@@ -394,6 +523,7 @@ export type Database = {
           is_own_team: boolean
           logo_url: string | null
           name: string
+          org_id: string
           short_name: string | null
           updated_at: string
         }
@@ -405,6 +535,7 @@ export type Database = {
           is_own_team?: boolean
           logo_url?: string | null
           name: string
+          org_id?: string
           short_name?: string | null
           updated_at?: string
         }
@@ -416,10 +547,19 @@ export type Database = {
           is_own_team?: boolean
           logo_url?: string | null
           name?: string
+          org_id?: string
           short_name?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "teams_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       videos: {
         Row: {
@@ -432,6 +572,7 @@ export type Database = {
           id: string
           last_synced_at: string | null
           match_id: string | null
+          org_id: string
           recorded_on: string | null
           set_number: number | null
           size_bytes: number | null
@@ -455,6 +596,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           match_id?: string | null
+          org_id?: string
           recorded_on?: string | null
           set_number?: number | null
           size_bytes?: number | null
@@ -478,6 +620,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           match_id?: string | null
+          org_id?: string
           recorded_on?: string | null
           set_number?: number | null
           size_bytes?: number | null
@@ -506,6 +649,13 @@ export type Database = {
             referencedRelation: "matches"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "videos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       weekly_activities: {
@@ -520,6 +670,7 @@ export type Database = {
           is_cancelled: boolean
           location: string | null
           opponent_team_id: string | null
+          org_id: string
           start_time: string | null
           title: string
           updated_at: string
@@ -535,6 +686,7 @@ export type Database = {
           is_cancelled?: boolean
           location?: string | null
           opponent_team_id?: string | null
+          org_id?: string
           start_time?: string | null
           title: string
           updated_at?: string
@@ -550,6 +702,7 @@ export type Database = {
           is_cancelled?: boolean
           location?: string | null
           opponent_team_id?: string | null
+          org_id?: string
           start_time?: string | null
           title?: string
           updated_at?: string
@@ -562,6 +715,13 @@ export type Database = {
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "weekly_activities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -569,7 +729,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      default_org_id: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never

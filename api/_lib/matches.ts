@@ -17,6 +17,7 @@ import { compareVideos, outcomeOf, toCompetition, toSetScores, toVideo } from '.
 import { deleteObject, listObjectKeys, matchFolderKey } from './storage.js'
 import { db, type Tables } from './supabase.js'
 import { discardCreatedTeam, resolveOpponent } from './teams.js'
+import type { Org } from './tenant.js'
 
 type MatchRow = Tables['matches']['Row']
 
@@ -53,12 +54,13 @@ function toMatchSummary(row: MatchRowData, opponent: TeamSummary, competition: C
  * competiciones y de una temporada de CourtTrack.
  */
 export async function listMatchesUntil(
+  org: Org,
   until: string,
   limit: number,
   competitionIds?: string[],
   leagueId?: string,
 ): Promise<MatchSummary[]> {
-  let query = db().from('matches').select(MATCH_SUMMARY_SELECT).lte('played_on', until)
+  let query = db().from('matches').select(MATCH_SUMMARY_SELECT).eq('org_id', org.id).lte('played_on', until)
   if (competitionIds?.length) query = query.in('competition_id', competitionIds)
   if (leagueId) query = query.eq('courtrack_league_id', leagueId)
   const { data, error } = await query
@@ -71,8 +73,13 @@ export async function listMatchesUntil(
 }
 
 /** Detalle de un partido con parciales y videos ordenados. Null si el slug no existe. */
-export async function getMatchBySlug(slug: string): Promise<MatchDetail | null> {
-  const { data, error } = await db().from('matches').select(MATCH_SUMMARY_SELECT).eq('slug', slug).maybeSingle()
+export async function getMatchBySlug(org: Org, slug: string): Promise<MatchDetail | null> {
+  const { data, error } = await db()
+    .from('matches')
+    .select(MATCH_SUMMARY_SELECT)
+    .eq('org_id', org.id)
+    .eq('slug', slug)
+    .maybeSingle()
   if (error) throw error
   if (!data) return null
 
@@ -80,6 +87,7 @@ export async function getMatchBySlug(slug: string): Promise<MatchDetail | null> 
   const { data: videoRows, error: videosError } = await db()
     .from('videos')
     .select('*')
+    .eq('org_id', org.id)
     .eq('match_id', row.id)
     .neq('status', 'archived')
   if (videosError) throw videosError
@@ -96,8 +104,13 @@ export async function getMatchBySlug(slug: string): Promise<MatchDetail | null> 
 
 export type MatchRef = Pick<MatchRow, 'id' | 'slug' | 'played_on'>
 
-export async function getMatchRef(id: string): Promise<MatchRef | null> {
-  const { data, error } = await db().from('matches').select('id,slug,played_on').eq('id', id).maybeSingle()
+export async function getMatchRef(org: Org, id: string): Promise<MatchRef | null> {
+  const { data, error } = await db()
+    .from('matches')
+    .select('id,slug,played_on')
+    .eq('id', id)
+    .eq('org_id', org.id)
+    .maybeSingle()
   if (error) throw error
   return data
 }
@@ -111,8 +124,8 @@ function assertPlayed(playedOn: string): void {
 const SLUG_ATTEMPTS = 3
 
 /** Primer slug libre: base, base-2, base-3... */
-async function freeSlug(base: string): Promise<string> {
-  const { data, error } = await db().from('matches').select('slug').like('slug', `${base}%`)
+async function freeSlug(org: Org, base: string): Promise<string> {
+  const { data, error } = await db().from('matches').select('slug').eq('org_id', org.id).like('slug', `${base}%`)
   if (error) throw error
   const taken = new Set(data.map((row) => row.slug))
   let slug = base
@@ -124,11 +137,11 @@ async function freeSlug(base: string): Promise<string> {
  * Crea el partido y, si hace falta, el rival. Siempre como visitante (is_home = false).
  * Si el partido no se puede guardar, el rival recién creado se borra para no dejar restos.
  */
-export async function createMatch(input: MatchCreateInput): Promise<MatchCreated> {
+export async function createMatch(org: Org, input: MatchCreateInput): Promise<MatchCreated> {
   assertPlayed(input.played_on)
-  const competition = await requireCompetition(input.competition_id)
+  const competition = await requireCompetition(org, input.competition_id)
 
-  const resolved = await resolveOpponent(input.opponent)
+  const resolved = await resolveOpponent(org, input.opponent)
   const opponent = resolved.team as TeamSummary // los partidos siempre tienen rival
 
   const { won, lost } = tallySets(input.set_scores)
@@ -136,10 +149,11 @@ export async function createMatch(input: MatchCreateInput): Promise<MatchCreated
 
   try {
     for (let attempt = 1; ; attempt += 1) {
-      const slug = await freeSlug(base)
+      const slug = await freeSlug(org, base)
       const { data, error } = await db()
         .from('matches')
         .insert({
+          org_id: org.id,
           slug,
           played_on: input.played_on,
           start_time: input.start_time,
@@ -160,7 +174,7 @@ export async function createMatch(input: MatchCreateInput): Promise<MatchCreated
       return { id: data.id, slug: data.slug, opponent }
     }
   } catch (err) {
-    await discardCreatedTeam(resolved)
+    await discardCreatedTeam(org, resolved)
     throw err
   }
 }
@@ -169,13 +183,13 @@ export async function createMatch(input: MatchCreateInput): Promise<MatchCreated
  * Edita los datos de un partido (rival, fecha, competición, parciales...). El slug no cambia: es la URL del
  * partido y el nombre de su carpeta en el bucket, donde ya pueden estar sus videos.
  */
-export async function updateMatch(input: MatchUpdateInput): Promise<MatchCreated> {
+export async function updateMatch(org: Org, input: MatchUpdateInput): Promise<MatchCreated> {
   assertPlayed(input.played_on)
-  const current = await getMatchRef(input.id)
+  const current = await getMatchRef(org, input.id)
   if (!current) throw notFound('Partido no encontrado')
-  const competition = await requireCompetition(input.competition_id)
+  const competition = await requireCompetition(org, input.competition_id)
 
-  const resolved = await resolveOpponent(input.opponent)
+  const resolved = await resolveOpponent(org, input.opponent)
   const opponent = resolved.team as TeamSummary
   const { won, lost } = tallySets(input.set_scores)
 
@@ -193,8 +207,9 @@ export async function updateMatch(input: MatchUpdateInput): Promise<MatchCreated
       set_scores: input.set_scores,
     })
     .eq('id', input.id)
+    .eq('org_id', org.id)
   if (error) {
-    await discardCreatedTeam(resolved)
+    await discardCreatedTeam(org, resolved)
     throw error
   }
 
@@ -203,6 +218,7 @@ export async function updateMatch(input: MatchUpdateInput): Promise<MatchCreated
     const { error: videosError } = await db()
       .from('videos')
       .update({ recorded_on: input.played_on })
+      .eq('org_id', org.id)
       .eq('match_id', current.id)
       .eq('recorded_on', current.played_on)
     if (videosError) console.error(videosError)
@@ -219,18 +235,19 @@ const DELETE_CONCURRENCY = 5
  * después las filas de videos y por último el partido. Si el bucket falla no se borra nada de la base de datos, y
  * repetir la operación es seguro. El rival no se borra.
  */
-export async function deleteMatch(input: MatchDeleteInput): Promise<void> {
-  const match = await getMatchRef(input.id)
+export async function deleteMatch(org: Org, input: MatchDeleteInput): Promise<void> {
+  const match = await getMatchRef(org, input.id)
   if (!match) throw notFound('Partido no encontrado')
 
   const { data: videoRows, error: videosError } = await db()
     .from('videos')
     .select('storage_key')
+    .eq('org_id', org.id)
     .eq('match_id', match.id)
     .eq('source', 'bucket')
   if (videosError) throw videosError
 
-  const keys = new Set(await listObjectKeys(matchFolderKey(match.slug)))
+  const keys = new Set(await listObjectKeys(matchFolderKey(org, match.slug)))
   for (const row of videoRows) if (row.storage_key) keys.add(row.storage_key)
   const pending = [...keys]
   await Promise.all(
@@ -239,8 +256,8 @@ export async function deleteMatch(input: MatchDeleteInput): Promise<void> {
     }),
   )
 
-  const { error: deleteVideosError } = await db().from('videos').delete().eq('match_id', match.id)
+  const { error: deleteVideosError } = await db().from('videos').delete().eq('org_id', org.id).eq('match_id', match.id)
   if (deleteVideosError) throw deleteVideosError
-  const { error } = await db().from('matches').delete().eq('id', match.id)
+  const { error } = await db().from('matches').delete().eq('id', match.id).eq('org_id', org.id)
   if (error) throw error
 }

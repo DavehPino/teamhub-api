@@ -3,8 +3,10 @@ import { todayIsoDate } from '../../shared/dates.js'
 import { upcomingActivitiesQuery } from '../../shared/schemas.js'
 import { listUpcomingActivities } from '../_lib/activities.js'
 import { cached, handle, parseQuery } from '../_lib/http.js'
+import { resolveOrg } from '../_lib/tenant.js'
 
 export const GET = handle(async (request) => {
+  const org = await resolveOrg(request)
   const { from, limit } = parseQuery(request, upcomingActivitiesQuery)
-  return cached(await listUpcomingActivities(from ?? todayIsoDate(), limit))
+  return cached(await listUpcomingActivities(org, from ?? todayIsoDate(), limit))
 })

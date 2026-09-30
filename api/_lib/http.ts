@@ -1,5 +1,6 @@
 // Utilidades HTTP para Vercel Functions con la firma Web estándar (Request → Response).
 import type { z } from 'zod'
+import { ORG_SLUG_HEADER } from '../../shared/domain.js'
 import type { ApiErrorBody } from '../../shared/schemas.js'
 import { env } from './env.js'
 
@@ -17,6 +18,8 @@ export class HttpError extends Error {
 export const badRequest = (message: string, details?: unknown) =>
   new HttpError(400, 'bad_request', message, details)
 export const unauthorized = (message = 'No autorizado') => new HttpError(401, 'unauthorized', message)
+export const forbidden = (message = 'No tienes permiso para esta organización') =>
+  new HttpError(403, 'forbidden', message)
 export const notFound = (message = 'No encontrado') => new HttpError(404, 'not_found', message)
 export const conflict = (message: string) => new HttpError(409, 'conflict', message)
 
@@ -29,8 +32,9 @@ export function json<T>(data: T, init: ResponseInit = {}): Response {
   return Response.json(data, init)
 }
 
+/** `Vary` evita que la caché del navegador sirva los datos de una organización a otra con la misma URL. */
 export function cached<T>(data: T, cacheControl: string = CACHE_PRIVATE): Response {
-  return json(data, { headers: { 'Cache-Control': cacheControl } })
+  return json(data, { headers: { 'Cache-Control': cacheControl, Vary: ORG_SLUG_HEADER } })
 }
 
 export function noStore<T>(data: T, status = 200): Response {

@@ -1,10 +1,12 @@
 // Competiciones de la organización (ligas, amistosos, torneos): la lista de los filtros y del formulario de partido.
+// competitions y courtrack_leagues conservan el org_id de texto (slug) que lee courtrack-service, y filtran por la FK
+// organization_id; los inserts escriben las dos columnas.
 import { COMPETITION_KINDS, type CompetitionKind } from '../../shared/domain.js'
 import type { Competition, CompetitionListItem, CompetitionSeason } from '../../shared/schemas.js'
-import { env } from './env.js'
 import { badRequest } from './http.js'
 import { toCompetition } from './mappers.js'
 import { db } from './supabase.js'
+import type { Org } from './tenant.js'
 
 const UNIQUE_VIOLATION = '23505'
 
@@ -12,13 +14,13 @@ const UNIQUE_VIOLATION = '23505'
 const KIND_ORDER: Record<CompetitionKind, number> = { league: 0, tournament: 1, friendly: 2, other: 3 }
 
 /** Todas las competiciones con su número de partidos jugados y sus temporadas de CourtTrack (abiertas y archivadas). */
-export async function listCompetitions(): Promise<CompetitionListItem[]> {
+export async function listCompetitions(org: Org): Promise<CompetitionListItem[]> {
   const [{ data, error }, { data: seasonRows, error: seasonsError }] = await Promise.all([
-    db().from('competitions').select('id,name,kind,matches(count)').eq('org_id', env.orgId),
+    db().from('competitions').select('id,name,kind,matches(count)').eq('organization_id', org.id),
     db()
       .from('courtrack_leagues')
       .select('id,competition_id,season_label,archived_at,created_at,matches(count)')
-      .eq('org_id', env.orgId)
+      .eq('organization_id', org.id)
       .order('created_at', { ascending: false }),
   ])
   if (error) throw error
@@ -42,31 +44,31 @@ export async function listCompetitions(): Promise<CompetitionListItem[]> {
 }
 
 /** Competición por id, solo si es de esta organización. */
-export async function getCompetition(id: string): Promise<Competition | null> {
+export async function getCompetition(org: Org, id: string): Promise<Competition | null> {
   const { data, error } = await db()
     .from('competitions')
     .select('id,name,kind')
     .eq('id', id)
-    .eq('org_id', env.orgId)
+    .eq('organization_id', org.id)
     .maybeSingle()
   if (error) throw error
   return data ? toCompetition(data) : null
 }
 
 /** Lanza 400 si la competición no existe (o no es de esta organización). */
-export async function requireCompetition(id: string): Promise<Competition> {
-  const competition = await getCompetition(id)
+export async function requireCompetition(org: Org, id: string): Promise<Competition> {
+  const competition = await getCompetition(org, id)
   if (!competition) throw badRequest('La competición elegida ya no existe')
   return competition
 }
 
 /** Busca por nombre (sin distinguir mayúsculas) o la crea. */
-export async function ensureCompetition(name: string, kind: CompetitionKind): Promise<Competition> {
+export async function ensureCompetition(org: Org, name: string, kind: CompetitionKind): Promise<Competition> {
   const trimmed = name.trim()
   const { data: existing, error: findError } = await db()
     .from('competitions')
     .select('id,name,kind')
-    .eq('org_id', env.orgId)
+    .eq('organization_id', org.id)
     .ilike('name', trimmed)
     .maybeSingle()
   if (findError) throw findError
@@ -74,10 +76,15 @@ export async function ensureCompetition(name: string, kind: CompetitionKind): Pr
 
   const { data, error } = await db()
     .from('competitions')
-    .insert({ org_id: env.orgId, name: trimmed, kind: COMPETITION_KINDS.includes(kind) ? kind : 'other' })
+    .insert({
+      org_id: org.slug,
+      organization_id: org.id,
+      name: trimmed,
+      kind: COMPETITION_KINDS.includes(kind) ? kind : 'other',
+    })
     .select('id,name,kind')
     .single()
-  if (error?.code === UNIQUE_VIOLATION) return ensureCompetition(trimmed, kind)
+  if (error?.code === UNIQUE_VIOLATION) return ensureCompetition(org, trimmed, kind)
   if (error) throw error
   return toCompetition(data)
 }

@@ -22,6 +22,7 @@ import { listUpcomingActivities } from './activities.js'
 import { env } from './env.js'
 import { HttpError } from './http.js'
 import { getOwnTeam } from './teams.js'
+import type { Org } from './tenant.js'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 /** Los modelos gratuitos pueden tardar: margen amplio, por debajo del maxDuration de la función (vercel.json). */
@@ -51,13 +52,13 @@ const TEMPLATE_GUIDE: Record<(typeof FLYER_TEMPLATES)[number], string> = {
   anuncio: 'anuncio general, convocatoria o evento: eyebrow, title, subtitle, details, date, location, cta',
 }
 
-function systemPrompt(teamName: string): string {
+function systemPrompt(teamName: string, teamProfile: string | undefined): string {
   const fields = FLYER_TEXT_FIELDS.map((f) => `- ${f} (máx. ${FLYER_TEXT_LIMITS[f]} caracteres): ${FIELD_GUIDE[f]}`)
   const templates = FLYER_TEMPLATES.map((t) => `- ${t} (${FLYER_TEMPLATE_LABELS[t]}): ${TEMPLATE_GUIDE[t]}`)
   const palettes = FLYER_PALETTES.map((p) => `- ${p} (${FLYER_PALETTE_LABELS[p]})`)
   return [
     `Eres el diseñador de redes sociales de ${teamName}.`,
-    ...(env.teamProfile ? [env.teamProfile] : []),
+    ...(teamProfile ? [teamProfile] : []),
     'El logo del equipo va en los flyers.',
     'Tu trabajo es redactar y ajustar flyers para Instagram según lo que pida el usuario.',
     '',
@@ -101,9 +102,9 @@ function describeActivity(activity: Activity): string {
   return `- ${parts.filter(Boolean).join(' · ')}`
 }
 
-async function upcomingContext(today: string): Promise<string> {
+async function upcomingContext(org: Org, today: string): Promise<string> {
   try {
-    const activities = await listUpcomingActivities(today, CONTEXT_ACTIVITIES)
+    const activities = await listUpcomingActivities(org, today, CONTEXT_ACTIVITIES)
     return activities.length > 0 ? activities.map(describeActivity).join('\n') : '(no hay actividades cargadas)'
   } catch (err) {
     // Sin base de datos el asistente sigue funcionando, solo que sin contexto.
@@ -261,14 +262,16 @@ async function callOpenRouter(apiKey: string, models: string[], system: string, 
   }
 }
 
-export async function suggestFlyer(input: FlyerSuggestInput): Promise<FlyerSuggestion> {
+export async function suggestFlyer(org: Org, input: FlyerSuggestInput): Promise<FlyerSuggestion> {
   const { apiKey, models } = env.openrouter
   if (!apiKey) {
     throw new HttpError(503, 'ai_disabled', 'El asistente no está configurado en el servidor (falta OPENROUTER_API_KEY).')
   }
 
-  const [activities, team] = await Promise.all([upcomingContext(input.today), getOwnTeam()])
-  const completion = await callOpenRouter(apiKey, models, systemPrompt(team.name), userPrompt(input, activities))
+  const [activities, team] = await Promise.all([upcomingContext(org, input.today), getOwnTeam(org)])
+  // TEAM_PROFILE describe al equipo de la organización por defecto: no se aplica a las demás.
+  const teamProfile = org.isDefault ? env.teamProfile : undefined
+  const completion = await callOpenRouter(apiKey, models, systemPrompt(team.name, teamProfile), userPrompt(input, activities))
   const parsed = extractJson(completion.choices?.[0]?.message?.content ?? '')
   if (!isRecord(parsed)) {
     throw new HttpError(502, 'ai_invalid', 'El asistente respondió en un formato inesperado. Prueba de nuevo o reformula el pedido.')

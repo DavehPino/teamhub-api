@@ -3,6 +3,7 @@ import type { Player, PlayerCreateInput, PlayerDeleteInput, PlayerUpdateInput } 
 import { conflict, notFound } from './http.js'
 import { PLAYER_SELECT, toPlayer } from './mappers.js'
 import { db } from './supabase.js'
+import type { Org } from './tenant.js'
 
 const UNIQUE_VIOLATION = '23505'
 
@@ -15,8 +16,8 @@ function comparePlayers(a: Player, b: Player): number {
   return a.name.localeCompare(b.name, 'es')
 }
 
-export async function listPlayers(): Promise<Player[]> {
-  const { data, error } = await db().from('players').select(PLAYER_SELECT)
+export async function listPlayers(org: Org): Promise<Player[]> {
+  const { data, error } = await db().from('players').select(PLAYER_SELECT).eq('org_id', org.id)
   if (error) throw error
   return data.map(toPlayer).sort(comparePlayers)
 }
@@ -24,10 +25,11 @@ export async function listPlayers(): Promise<Player[]> {
 const jerseyConflict = (jerseyNumber: number | null) =>
   conflict(`Ya hay un jugador activo con el número ${jerseyNumber}`)
 
-export async function createPlayer(input: PlayerCreateInput): Promise<Player> {
+export async function createPlayer(org: Org, input: PlayerCreateInput): Promise<Player> {
   const { data, error } = await db()
     .from('players')
     .insert({
+      org_id: org.id,
       name: input.name,
       jersey_number: input.jersey_number,
       primary_position: input.primary_position,
@@ -41,7 +43,7 @@ export async function createPlayer(input: PlayerCreateInput): Promise<Player> {
   return toPlayer(data)
 }
 
-export async function updatePlayer(input: PlayerUpdateInput): Promise<Player> {
+export async function updatePlayer(org: Org, input: PlayerUpdateInput): Promise<Player> {
   const { data, error } = await db()
     .from('players')
     .update({
@@ -52,6 +54,7 @@ export async function updatePlayer(input: PlayerUpdateInput): Promise<Player> {
       is_active: input.is_active,
     })
     .eq('id', input.id)
+    .eq('org_id', org.id)
     .select(PLAYER_SELECT)
     .maybeSingle()
   if (error?.code === UNIQUE_VIOLATION) throw jerseyConflict(input.jersey_number)
@@ -61,8 +64,8 @@ export async function updatePlayer(input: PlayerUpdateInput): Promise<Player> {
 }
 
 /** Borra el jugador; sale de todas las formaciones (on delete cascade). */
-export async function deletePlayer(input: PlayerDeleteInput): Promise<void> {
-  const { data, error } = await db().from('players').delete().eq('id', input.id).select('id')
+export async function deletePlayer(org: Org, input: PlayerDeleteInput): Promise<void> {
+  const { data, error } = await db().from('players').delete().eq('id', input.id).eq('org_id', org.id).select('id')
   if (error) throw error
   if (data.length === 0) throw notFound('Jugador no encontrado')
 }
