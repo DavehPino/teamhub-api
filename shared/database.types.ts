@@ -30,7 +30,7 @@ export type Database = {
           kind?: string
           name: string
           org_id: string
-          organization_id?: string
+          organization_id: string
           updated_at?: string
         }
         Update: {
@@ -89,7 +89,7 @@ export type Database = {
           liga_id: number
           liga_name: string
           org_id: string
-          organization_id?: string
+          organization_id: string
           season_label: string
           snapshot_at?: string | null
           standings?: Json | null
@@ -152,7 +152,7 @@ export type Database = {
           id?: string
           normalized_name: string
           org_id: string
-          organization_id?: string
+          organization_id: string
           team_id: string
         }
         Update: {
@@ -231,7 +231,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
-          org_id?: string
+          org_id: string
           updated_at?: string
         }
         Update: {
@@ -286,7 +286,7 @@ export type Database = {
           is_home?: boolean
           location?: string | null
           opponent_team_id: string
-          org_id?: string
+          org_id: string
           phase?: string | null
           played_on: string
           set_scores?: Json
@@ -434,7 +434,7 @@ export type Database = {
           is_active?: boolean
           jersey_number?: number | null
           name: string
-          org_id?: string
+          org_id: string
           primary_position: string
           secondary_position?: string | null
           updated_at?: string
@@ -481,7 +481,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           org_id: string
-          organization_id?: string
+          organization_id: string
           result?: Json | null
           source?: string
           started_at?: string
@@ -538,7 +538,7 @@ export type Database = {
           is_own_team?: boolean
           logo_url?: string | null
           name: string
-          org_id?: string
+          org_id: string
           short_name?: string | null
           updated_at?: string
         }
@@ -599,7 +599,7 @@ export type Database = {
           id?: string
           last_synced_at?: string | null
           match_id?: string | null
-          org_id?: string
+          org_id: string
           recorded_on?: string | null
           set_number?: number | null
           size_bytes?: number | null
@@ -689,7 +689,7 @@ export type Database = {
           is_cancelled?: boolean
           location?: string | null
           opponent_team_id?: string | null
-          org_id?: string
+          org_id: string
           start_time?: string | null
           title: string
           updated_at?: string
@@ -732,7 +732,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      default_org_id: { Args: never; Returns: string }
+      delete_organization: {
+        Args: { p_confirm_slug: string; p_org: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

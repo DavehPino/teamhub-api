@@ -19,7 +19,12 @@ export type OrgHandler = (request: Request, org: Org) => Promise<Response>
 /** Mismo formato que el CHECK organizations_slug_format. */
 const SLUG_FORMAT = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
-/** Las organizaciones casi no cambian: se recuerdan un minuto por instancia para no consultar en cada petición. */
+/**
+ * Las organizaciones casi no cambian: se recuerdan un minuto por instancia para no consultar en cada petición.
+ * Limitación conocida: si se borra una organización (delete_organization) y se vuelve a crear otra con el MISMO slug,
+ * las instancias que la tenían en caché siguen usando el id antiguo hasta 60 s (lecturas vacías, 403 o errores de FK,
+ * nunca datos de otra organización). Esperar un minuto antes de reutilizar un slug borrado.
+ */
 const CACHE_TTL_MS = 60_000
 const cache = new Map<string, { org: Org; expires: number }>()
 
