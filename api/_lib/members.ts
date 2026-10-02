@@ -12,6 +12,7 @@ import {
   type MemberRemoveInput,
   type MemberRole,
   type MemberRoleInput,
+  type OrgUpdateInput,
   type OrgInfo,
   type OrgInvite,
   type OrgMember,
@@ -59,6 +60,43 @@ export async function listMembers(org: Org, meId: string): Promise<OrgMember[]> 
     }),
   )
   return members.sort((a, b) => (a.role === b.role ? a.joined_at.localeCompare(b.joined_at) : a.role === 'admin' ? -1 : 1))
+}
+
+/**
+ * Cambia el nombre y/o la marca del club. El nombre del club es también el de su equipo propio (el de los partidos), así
+ * que se cambian juntos, y el escudo se copia al equipo propio. El slug no cambia nunca: es lo que usan los enlaces de
+ * invitación y la cabecera x-org-slug. Los colores y el escudo se mezclan con los que ya hay; `null` quita uno.
+ */
+export async function updateOrg(org: Org, input: OrgUpdateInput): Promise<OrgInfo> {
+  const { data: current, error } = await db().from('organizations').select('theme').eq('id', org.id).single()
+  if (error) throw error
+  const base: Record<string, string> = {}
+  if (current.theme && typeof current.theme === 'object' && !Array.isArray(current.theme)) {
+    for (const [key, value] of Object.entries(current.theme)) if (typeof value === 'string') base[key] = value
+  }
+
+  const patch: { name?: string; theme?: Record<string, string> } = {}
+  if (input.name !== undefined) patch.name = input.name
+  if (input.theme !== undefined) {
+    const merged = base
+    for (const [key, value] of Object.entries(input.theme)) {
+      if (value === undefined) continue
+      if (value === null) delete merged[key]
+      else merged[key] = value
+    }
+    patch.theme = merged
+  }
+  const { error: updateError } = await db().from('organizations').update(patch).eq('id', org.id)
+  if (updateError) throw updateError
+
+  const teamPatch: { name?: string; logo_url?: string | null } = {}
+  if (input.name !== undefined) teamPatch.name = input.name
+  if (input.theme?.logo_url !== undefined) teamPatch.logo_url = input.theme.logo_url
+  if (Object.keys(teamPatch).length > 0) {
+    const { error: teamError } = await db().from('teams').update(teamPatch).eq('org_id', org.id).eq('is_own_team', true)
+    if (teamError) throw teamError
+  }
+  return getOrgInfo(org)
 }
 
 function memberError(error: { message?: string }): never {

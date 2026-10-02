@@ -39,6 +39,25 @@ export const orgCreateInput = z.object({
 });
 export type OrgCreateInput = z.infer<typeof orgCreateInput>;
 
+/**
+ * Edición del club (solo administradores). Todo es opcional: lo que no se envía no cambia. En `theme`, un color o el
+ * escudo en `null` se quitan (vuelven al valor por defecto de la app).
+ */
+export const orgUpdateInput = z
+  .object({
+    name: z.string().trim().min(2, "Escribe el nombre del club").max(ORG_NAME_MAX).optional(),
+    theme: z
+      .object({
+        primary: hexColor.nullable().optional(),
+        accent: hexColor.nullable().optional(),
+        accent_2: hexColor.nullable().optional(),
+        logo_url: z.url({ protocol: /^https$/, error: "El escudo debe ser una URL https" }).max(500).nullable().optional(),
+      })
+      .optional(),
+  })
+  .refine((value) => value.name !== undefined || value.theme !== undefined, "No hay nada que cambiar");
+export type OrgUpdateInput = z.infer<typeof orgUpdateInput>;
+
 export const inviteAcceptInput = z.object({ code: inviteCode });
 export type InviteAcceptInput = z.infer<typeof inviteAcceptInput>;
 

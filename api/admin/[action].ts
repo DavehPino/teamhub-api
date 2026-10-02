@@ -23,7 +23,7 @@ import {
   videoDeleteInput,
   videoUpdateInput,
 } from '../../shared/schemas.js'
-import { inviteCreateInput, inviteRevokeInput, memberRemoveInput, memberRoleInput } from '../../shared/onboarding.js'
+import { inviteCreateInput, inviteRevokeInput, memberRemoveInput, memberRoleInput, orgUpdateInput } from '../../shared/onboarding.js'
 import { createActivity, deleteActivity, updateActivity } from '../_lib/activities.js'
 import { requireAdmin, requireOrgAdmin, type Actor } from '../_lib/admin.js'
 import { getCourtrackCatalog, getCourtrackSyncStatus, runCourtrackSync } from '../_lib/courtrackSync.js'
@@ -31,7 +31,7 @@ import { handle, noStore, parseBody, pathParam, routeFor } from '../_lib/http.js
 import { createLeague, deleteLeague, getLeagueSnapshot, listLeagues, updateLeague } from '../_lib/leagues.js'
 import { deleteLineup, saveLineup } from '../_lib/lineups.js'
 import { createMatch, deleteMatch, updateMatch } from '../_lib/matches.js'
-import { createInvite, listInvites, listMembers, removeMember, revokeInvite, setMemberRole } from '../_lib/members.js'
+import { createInvite, listInvites, listMembers, removeMember, revokeInvite, setMemberRole, updateOrg } from '../_lib/members.js'
 import { createPlayer, deletePlayer, updatePlayer } from '../_lib/players.js'
 import { createTeamLink } from '../_lib/teamLinks.js'
 import { resolveOrg, type Org } from '../_lib/tenant.js'
@@ -133,6 +133,12 @@ const actions: Record<string, AdminHandler> = {
   'member-remove': async (request, org) => {
     await removeMember(org, await parseBody(request, memberRemoveInput))
     return noStore({ ok: true })
+  },
+
+  // POST /api/admin/org-update { name?, theme? } → OrgInfo. Nombre, colores y escudo del club. Solo administradores.
+  'org-update': async (request, org, actor) => {
+    requireOrgAdmin(actor)
+    return noStore(await updateOrg(org, await parseBody(request, orgUpdateInput)))
   },
 
   // POST /api/admin/invites → OrgInvite[]. Códigos activos con su número de usos.
