@@ -378,6 +378,41 @@ export type Database = {
         }
         Relationships: []
       }
+      org_guest_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          org_id: string
+          used_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id: string
+          used_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          org_id?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_guest_codes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_invites: {
         Row: {
           code: string
@@ -817,6 +852,13 @@ export type Database = {
       delete_organization: {
         Args: { p_confirm_slug: string; p_org: string }
         Returns: undefined
+      }
+      redeem_guest_code: {
+        Args: { p_code: string }
+        Returns: {
+          name: string
+          slug: string
+        }[]
       }
       remove_org_member: {
         Args: { p_org: string; p_user: string }

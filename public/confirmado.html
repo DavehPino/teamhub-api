@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Cuenta confirmada · TeamHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700&family=Sofia+Sans:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+      :root { --paper: #eeece7; --ink: #161412; --soft: #57524a; --gold: #f5b014; --danger: #9c2419; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink); font-family: "Sofia Sans", system-ui, sans-serif; display: flex; justify-content: center; }
+      main { width: 100%; max-width: 520px; padding: 40px 24px 56px; }
+      .rule { height: 8px; background: var(--ink); margin-bottom: 20px; }
+      .brand { font-family: "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 22px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 28px; }
+      h1 { font-family: "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 52px; line-height: 1; margin: 0 0 16px; }
+      p { font-size: 18px; line-height: 1.45; color: var(--soft); margin: 0 0 20px; }
+      .button { display: inline-block; background: var(--ink); color: var(--gold); text-decoration: none; font-weight: 700; font-size: 16px; letter-spacing: .06em; text-transform: uppercase; padding: 16px 28px; box-shadow: 4px 4px 0 rgba(22, 20, 18, .35); }
+      .small { font-size: 14px; margin-top: 28px; }
+      .error h1 { color: var(--danger); }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="rule"></div>
+      <p class="brand">TeamHub</p>
+
+      <section id="ok">
+        <h1>¡Cuenta confirmada!</h1>
+        <p>Tu correo quedó verificado. Vuelve a la app TeamHub e inicia sesión con tu email y tu contraseña.</p>
+        <a class="button" href="teamhub://">Abrir TeamHub</a>
+        <p class="small">Si estás en una computadora, abre la app en tu teléfono.</p>
+      </section>
+
+      <section id="fail" class="error" hidden>
+        <h1>El enlace no es válido</h1>
+        <p>Puede haber caducado o ya se usó. Si ya confirmaste tu cuenta, abre TeamHub e inicia sesión. Si no, vuelve a registrarte desde la app para recibir otro correo.</p>
+        <a class="button" href="teamhub://">Abrir TeamHub</a>
+      </section>
+    </main>
+    <script>
+      // Supabase deja el resultado en el fragmento (#error=… si el enlace caducó). Se lee y se borra de la barra de direcciones.
+      var params = new URLSearchParams(location.hash.replace(/^#/, ''))
+      if (params.get('error') || params.get('error_code')) {
+        document.getElementById('ok').hidden = true
+        document.getElementById('fail').hidden = false
+      }
+      history.replaceState(null, '', location.pathname)
+    </script>
+  </body>
+</html>

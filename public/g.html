@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Invitación · TeamHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Extra+Condensed:wght@700&family=Sofia+Sans:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+      :root { --paper: #eeece7; --ink: #161412; --soft: #57524a; --gold: #f5b014; --danger: #9c2419; --deep: #dfdcd4; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink); font-family: "Sofia Sans", system-ui, sans-serif; display: flex; justify-content: center; }
+      main { width: 100%; max-width: 520px; padding: 40px 24px 56px; }
+      .rule { height: 8px; background: var(--ink); margin-bottom: 20px; }
+      .brand { font-family: "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 22px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 28px; }
+      h1 { font-family: "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 48px; line-height: 1; margin: 0 0 16px; }
+      p { font-size: 18px; line-height: 1.45; color: var(--soft); margin: 0 0 20px; }
+      .code { font-family: "Sofia Sans Extra Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 64px; letter-spacing: .12em; text-align: center; background: #fff; border: 2px solid var(--ink); padding: 14px 8px; margin: 8px 0 24px; user-select: all; }
+      ol { padding-left: 22px; margin: 0 0 28px; font-size: 18px; line-height: 1.5; color: var(--soft); }
+      li { margin-bottom: 6px; }
+      .button { display: inline-block; background: var(--ink); color: var(--gold); text-decoration: none; font-weight: 700; font-size: 16px; letter-spacing: .06em; text-transform: uppercase; padding: 16px 28px; box-shadow: 4px 4px 0 rgba(22, 20, 18, .35); }
+      .small { font-size: 14px; margin-top: 24px; }
+      .error h1 { color: var(--danger); }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="rule"></div>
+      <p class="brand">TeamHub</p>
+
+      <section id="ok">
+        <h1>Te invitaron a mirar un club</h1>
+        <p>Código de invitado (se puede usar una sola vez):</p>
+        <div class="code" id="code"></div>
+        <ol>
+          <li>Instala la app <strong>TeamHub</strong>.</li>
+          <li>Ábrela y elige <strong>«Entrar como invitado»</strong>.</li>
+          <li>Escribe el código de arriba.</li>
+        </ol>
+        <a class="button" id="open" href="teamhub://">Abrir TeamHub con este código</a>
+        <p class="small">Si ya la tienes instalada, el botón la abre directo con el código puesto.</p>
+      </section>
+
+      <section id="fail" class="error" hidden>
+        <h1>Esta invitación no es válida</h1>
+        <p>Revisa que el enlace esté completo. Si el problema sigue, pide un código nuevo a quien te invitó.</p>
+      </section>
+    </main>
+    <script>
+      // /g/O6A31G → el código sale de la dirección. Solo letras y números, 6 caracteres.
+      var code = (location.pathname.split('/').filter(Boolean)[1] || '').toUpperCase()
+      if (/^[A-Z0-9]{6}$/.test(code)) {
+        document.getElementById('code').textContent = code
+        var link = 'teamhub://g/' + code
+        document.getElementById('open').href = link
+        // En Android intenta abrir la app sola; en otros dispositivos queda el botón.
+        if (/Android/i.test(navigator.userAgent)) setTimeout(function () { location.href = link }, 700)
+      } else {
+        document.getElementById('ok').hidden = true
+        document.getElementById('fail').hidden = false
+      }
+    </script>
+  </body>
+</html>

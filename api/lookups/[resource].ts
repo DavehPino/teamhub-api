@@ -4,9 +4,12 @@
 //   /api/lookups/players      → Player[] (activos primero, por número y nombre)
 //   /api/lookups/lineups      → Lineup[] con sus jugadores en cancha (la más reciente primero)
 //   /api/lookups/org          → OrgInfo { slug, name, theme }: lo que ve un invitado sin cuenta
+// POST /api/lookups/guest-code { code } → GuestAccess { slug, name }: canjea un código de invitado (un solo uso). Sin x-org-slug ni sesión.
 // Sin caché: el formulario de alta tiene que ver al instante un equipo o una competición recién creados.
+import { guestCodeRedeemInput } from '../../shared/onboarding.js'
 import { listCompetitions } from '../_lib/competitions.js'
-import { handle, noStore, pathParam, routeFor } from '../_lib/http.js'
+import { redeemGuestCode } from '../_lib/guestCodes.js'
+import { handle, noStore, parseBody, pathParam, routeFor } from '../_lib/http.js'
 import { listLineups } from '../_lib/lineups.js'
 import { getOrgInfo } from '../_lib/members.js'
 import { listPlayers } from '../_lib/players.js'
@@ -25,3 +28,10 @@ export const GET = handle(async (request) => {
   const resource = routeFor(resources, pathParam(request))
   return resource(request, await resolveOrg(request))
 })
+
+const writes: Record<string, (request: Request) => Promise<Response>> = {
+  'guest-code': async (request) => noStore(await redeemGuestCode(await parseBody(request, guestCodeRedeemInput))),
+}
+
+// Sin resolveOrg: el código ya dice a qué club da acceso (y sin x-org-slug se tomaría el club por defecto).
+export const POST = handle(async (request) => routeFor(writes, pathParam(request))(request))

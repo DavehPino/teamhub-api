@@ -26,6 +26,7 @@ import {
 import { inviteCreateInput, inviteRevokeInput, memberRemoveInput, memberRoleInput, orgUpdateInput } from '../../shared/onboarding.js'
 import { createActivity, deleteActivity, updateActivity } from '../_lib/activities.js'
 import { requireAdmin, requireOrgAdmin, type Actor } from '../_lib/admin.js'
+import { createGuestCode } from '../_lib/guestCodes.js'
 import { getCourtrackCatalog, getCourtrackSyncStatus, runCourtrackSync } from '../_lib/courtrackSync.js'
 import { handle, noStore, parseBody, pathParam, routeFor } from '../_lib/http.js'
 import { createLeague, deleteLeague, getLeagueSnapshot, listLeagues, updateLeague } from '../_lib/leagues.js'
@@ -41,7 +42,7 @@ import { deleteVideo, updateVideo } from '../_lib/videos.js'
 type AdminHandler = (request: Request, org: Org, actor: Actor) => Promise<Response>
 
 /** Acciones solo para administradores del club con sesión (no valen las palabras clave ni el rol `coach`). */
-const ADMIN_ONLY = new Set(['members', 'member-role', 'member-remove', 'invites', 'invite-create', 'invite-revoke'])
+const ADMIN_ONLY = new Set(['members', 'member-role', 'member-remove', 'invites', 'invite-create', 'invite-revoke', 'guest-code-create'])
 
 const actions: Record<string, AdminHandler> = {
   // POST /api/admin/verify → { ok: true } si la palabra clave o la sesión son correctas; 401/403 si no.
@@ -147,6 +148,9 @@ const actions: Record<string, AdminHandler> = {
   // POST /api/admin/invite-create { role?, max_uses? } → 201 OrgInvite. Código que no caduca; sin max_uses es ilimitado.
   'invite-create': async (request, org, actor) =>
     noStore(await createInvite(org, requireOrgAdmin(actor), await parseBody(request, inviteCreateInput)), 201),
+
+  // POST /api/admin/guest-code-create → 201 GuestCode. Código de invitado nuevo (solo lectura, sin cuenta, un solo uso). Solo administradores.
+  'guest-code-create': async (_request, org, actor) => noStore(await createGuestCode(org, requireOrgAdmin(actor)), 201),
 
   // POST /api/admin/invite-revoke { code } → { ok: true }. Quien ya entró se queda; nadie más puede usar el código.
   'invite-revoke': async (request, org) => {

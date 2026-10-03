@@ -13,6 +13,8 @@ export const MEMBER_ROLE_LABELS: Record<MemberRole, string> = { admin: "Administ
 /** Alfabeto de los códigos de invitación: sin 0/O ni 1/I/L, para dictarlos o copiarlos sin confundirse. */
 export const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export const INVITE_CODE_LENGTH = 8;
+/** Código de invitado (solo lectura, un solo uso): más corto que el de miembro porque se canjea una sola vez. */
+export const GUEST_CODE_LENGTH = 6;
 
 /** "k7qm-x2pa" → "K7QMX2PA": se ignoran espacios, guiones y mayúsculas al escribir un código. */
 export const normalizeInviteCode = (raw: string): string => raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
@@ -60,6 +62,10 @@ export type OrgUpdateInput = z.infer<typeof orgUpdateInput>;
 
 export const inviteAcceptInput = z.object({ code: inviteCode });
 export type InviteAcceptInput = z.infer<typeof inviteAcceptInput>;
+
+/** Canjear un código de invitado. Sin sesión ni club: el código ya identifica el club. */
+export const guestCodeRedeemInput = z.object({ code: inviteCode });
+export type GuestCodeRedeemInput = z.infer<typeof guestCodeRedeemInput>;
 
 export const orgLeaveInput = z.object({ slug: z.string().trim().min(1).max(60) });
 export type OrgLeaveInput = z.infer<typeof orgLeaveInput>;
@@ -113,6 +119,12 @@ export type OrgInvite = {
   uses: number;
   created_at: string;
 };
+
+/** Código de invitado recién generado (un solo uso). `code` viaja sin formato: "O6A31G". */
+export type GuestCode = { code: string; created_at: string };
+
+/** El club al que da acceso un código de invitado canjeado. */
+export type GuestAccess = { slug: string; name: string };
 
 /** Datos públicos de un club (lo que ve un invitado sin cuenta). */
 export type OrgInfo = { slug: string; name: string; theme: Record<string, unknown> };

@@ -3,6 +3,7 @@
   "framework": null,
   "buildCommand": "npm run build",
   "outputDirectory": "public",
+  "rewrites": [{ "source": "/g/:code", "destination": "/g.html" }],
   "headers": [
     {
       "source": "/(.*)",

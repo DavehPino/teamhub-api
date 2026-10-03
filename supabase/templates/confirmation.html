@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light only" />
+    <title>Confirma tu cuenta de TeamHub</title>
+  </head>
+  <body style="margin:0;padding:0;background:#eeece7;">
+    <!-- Texto de vista previa en la bandeja de entrada -->
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#eeece7;">
+      Un paso más: confirma tu correo para entrar a TeamHub.
+    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eeece7;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#eeece7;">
+            <tr><td style="height:8px;background:#161412;font-size:0;line-height:0;">&nbsp;</td></tr>
+            <tr>
+              <td style="padding:22px 4px 6px 4px;font-family:'Arial Narrow','Roboto Condensed',Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#161412;">
+                TeamHub
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 4px 0 4px;font-family:'Arial Narrow','Roboto Condensed',Arial,sans-serif;font-size:40px;line-height:44px;font-weight:700;color:#161412;">
+                Confirma tu correo
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 4px 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:25px;color:#57524a;">
+                Gracias por crear tu cuenta en TeamHub. Solo falta confirmar que este correo (<strong style="color:#161412;">{{ .Email }}</strong>) es tuyo.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 4px 8px 4px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td bgcolor="#161412" style="background:#161412;border-bottom:4px solid #b7b2a7;">
+                      <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:16px 30px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-decoration:none;color:#f5b014;">
+                        Confirmar mi correo
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 4px 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:21px;color:#57524a;">
+                Después vuelve a la app, inicia sesión con tu email y tu contraseña, y listo.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 4px 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;color:#57524a;">
+                Si el botón no funciona, copia y pega este enlace en tu navegador:<br />
+                <a href="{{ .ConfirmationURL }}" style="color:#161412;word-break:break-all;">{{ .ConfirmationURL }}</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px 4px 0 4px;border-top:1px solid #b7b2a7;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#57524a;">
+                Si no creaste una cuenta en TeamHub, ignora este mensaje: no se hará ningún cambio.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
